@@ -14,6 +14,8 @@ import (
 	"developer-mount/internal/protocol"
 )
 
+const defaultMetadataCacheTTL = 2 * time.Second
+
 type nodeRecord struct {
 	id       uint64
 	parentID uint64
@@ -35,16 +37,23 @@ type readHandle struct {
 
 type metadataBackend struct {
 	rootPath string
+	now      func() time.Time
+	cacheTTL time.Duration
 
 	nextNodeID   atomic.Uint64
 	nextCursorID atomic.Uint64
 	nextHandleID atomic.Uint64
 
-	mu          sync.RWMutex
-	nodesByID   map[uint64]nodeRecord
-	nodesByPath map[string]uint64
-	cursors     map[uint64]dirCursor
-	handles     map[uint64]*readHandle
+	stats metadataCacheStats
+
+	mu            sync.RWMutex
+	nodesByID     map[uint64]nodeRecord
+	nodesByPath   map[string]uint64
+	cursors       map[uint64]dirCursor
+	handles       map[uint64]*readHandle
+	attrCache     map[string]attrCacheEntry
+	negativeCache map[string]negativeCacheEntry
+	dirSnapshots  map[uint64]dirSnapshotEntry
 }
 
 func newMetadataBackend(rootPath string) (*metadataBackend, error) {
@@ -60,21 +69,34 @@ func newMetadataBackend(rootPath string) (*metadataBackend, error) {
 		return nil, fmt.Errorf("root path must be a directory")
 	}
 	b := &metadataBackend{
-		rootPath:    absRoot,
-		nodesByID:   make(map[uint64]nodeRecord),
-		nodesByPath: make(map[string]uint64),
-		cursors:     make(map[uint64]dirCursor),
-		handles:     make(map[uint64]*readHandle),
+		rootPath:      absRoot,
+		now:           time.Now,
+		cacheTTL:      defaultMetadataCacheTTL,
+		nodesByID:     make(map[uint64]nodeRecord),
+		nodesByPath:   make(map[string]uint64),
+		cursors:       make(map[uint64]dirCursor),
+		handles:       make(map[uint64]*readHandle),
+		attrCache:     make(map[string]attrCacheEntry),
+		negativeCache: make(map[string]negativeCacheEntry),
+		dirSnapshots:  make(map[uint64]dirSnapshotEntry),
 	}
 	b.nextNodeID.Store(1)
 	b.nextCursorID.Store(1000)
 	b.nextHandleID.Store(2000)
 	b.nodesByID[1] = nodeRecord{id: 1, parentID: 1, relPath: ""}
 	b.nodesByPath[""] = 1
+	if _, err := b.refreshNodeInfo("", 1); err != nil {
+		return nil, err
+	}
+	_ = b.prefetchRoot()
 	return b, nil
 }
 
 func (b *metadataBackend) RootNodeID() uint64 { return 1 }
+
+func (b *metadataBackend) Stats() MetadataCacheStats {
+	return b.stats.snapshot()
+}
 
 func (b *metadataBackend) Lookup(parentNodeID uint64, name string) (protocol.NodeInfo, error) {
 	if name == "" || name == "." || strings.Contains(name, string(filepath.Separator)) || strings.Contains(name, "/") || name == ".." {
@@ -97,34 +119,13 @@ func (b *metadataBackend) GetAttr(nodeID uint64) (protocol.NodeInfo, error) {
 }
 
 func (b *metadataBackend) OpenDir(nodeID uint64) (uint64, error) {
-	rec, err := b.nodeByID(nodeID)
+	entries, err := b.snapshotDir(nodeID)
 	if err != nil {
 		return 0, err
 	}
-	abs := b.absPath(rec.relPath)
-	entries, err := os.ReadDir(abs)
-	if err != nil {
-		return 0, err
-	}
-	items := make([]protocol.DirEntry, 0, len(entries))
-	for _, entry := range entries {
-		childInfo, err := b.Lookup(nodeID, entry.Name())
-		if err != nil {
-			continue
-		}
-		items = append(items, protocol.DirEntry{
-			NodeID:   childInfo.NodeID,
-			Name:     childInfo.Name,
-			FileType: childInfo.FileType,
-			Size:     childInfo.Size,
-			Mode:     childInfo.Mode,
-			ModTime:  childInfo.ModTime,
-		})
-	}
-	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 	cursorID := b.nextCursorID.Add(1)
 	b.mu.Lock()
-	b.cursors[cursorID] = dirCursor{id: cursorID, nodeID: nodeID, entries: items}
+	b.cursors[cursorID] = dirCursor{id: cursorID, nodeID: nodeID, entries: entries}
 	b.mu.Unlock()
 	return cursorID, nil
 }
@@ -220,11 +221,73 @@ func (b *metadataBackend) nodeByID(nodeID uint64) (nodeRecord, error) {
 }
 
 func (b *metadataBackend) nodeInfoForPath(relPath string, parentHint uint64) (protocol.NodeInfo, error) {
+	relPath = strings.TrimPrefix(relPath, string(filepath.Separator))
+	if b.isNegativeCached(relPath) {
+		b.stats.negativeHits.Add(1)
+		return protocol.NodeInfo{}, os.ErrNotExist
+	}
+	b.stats.negativeMisses.Add(1)
+	if info, ok := b.cachedNodeInfo(relPath); ok {
+		b.stats.attrHits.Add(1)
+		return b.withResolvedParent(info, relPath, parentHint), nil
+	}
+	b.stats.attrMisses.Add(1)
+	return b.refreshNodeInfo(relPath, parentHint)
+}
+
+func (b *metadataBackend) snapshotDir(nodeID uint64) ([]protocol.DirEntry, error) {
+	if entries, ok := b.cachedDirSnapshot(nodeID); ok {
+		b.stats.dirSnapshotHits.Add(1)
+		return entries, nil
+	}
+	b.stats.dirSnapshotMisses.Add(1)
+	return b.refreshDirSnapshot(nodeID)
+}
+
+func (b *metadataBackend) refreshDirSnapshot(nodeID uint64) ([]protocol.DirEntry, error) {
+	rec, err := b.nodeByID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	abs := b.absPath(rec.relPath)
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]protocol.DirEntry, 0, len(entries))
+	for _, entry := range entries {
+		childRel := strings.TrimPrefix(filepath.Join(rec.relPath, entry.Name()), string(filepath.Separator))
+		childInfo, err := b.nodeInfoForPath(childRel, nodeID)
+		if err != nil {
+			continue
+		}
+		items = append(items, protocol.DirEntry{
+			NodeID:   childInfo.NodeID,
+			Name:     childInfo.Name,
+			FileType: childInfo.FileType,
+			Size:     childInfo.Size,
+			Mode:     childInfo.Mode,
+			ModTime:  childInfo.ModTime,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
+	b.mu.Lock()
+	b.dirSnapshots[nodeID] = dirSnapshotEntry{entries: append([]protocol.DirEntry(nil), items...), expiresAt: b.now().Add(b.cacheTTL)}
+	b.mu.Unlock()
+	return append([]protocol.DirEntry(nil), items...), nil
+}
+
+func (b *metadataBackend) refreshNodeInfo(relPath string, parentHint uint64) (protocol.NodeInfo, error) {
 	abs := b.absPath(relPath)
 	info, err := os.Stat(abs)
 	if err != nil {
+		if os.IsNotExist(err) {
+			b.recordNegative(relPath)
+			return protocol.NodeInfo{}, err
+		}
 		return protocol.NodeInfo{}, err
 	}
+	b.clearNegative(relPath)
 	nodeID := b.ensureNode(relPath, parentHint)
 	parentID := parentHint
 	if relPath == "" {
@@ -240,7 +303,7 @@ func (b *metadataBackend) nodeInfoForPath(relPath string, parentHint uint64) (pr
 	if info.IsDir() {
 		fileType = protocol.FileTypeDirectory
 	}
-	return protocol.NodeInfo{
+	entry := protocol.NodeInfo{
 		NodeID:       nodeID,
 		ParentNodeID: parentID,
 		Name:         info.Name(),
@@ -248,7 +311,92 @@ func (b *metadataBackend) nodeInfoForPath(relPath string, parentHint uint64) (pr
 		Size:         info.Size(),
 		Mode:         uint32(info.Mode()),
 		ModTime:      protocol.NowRFC3339(info.ModTime()),
-	}, nil
+	}
+	b.mu.Lock()
+	b.attrCache[relPath] = attrCacheEntry{info: entry, expiresAt: b.now().Add(b.cacheTTL)}
+	b.mu.Unlock()
+	return entry, nil
+}
+
+func (b *metadataBackend) cachedNodeInfo(relPath string) (protocol.NodeInfo, bool) {
+	b.mu.RLock()
+	entry, ok := b.attrCache[relPath]
+	b.mu.RUnlock()
+	if !ok || !b.isFresh(entry.expiresAt) {
+		if ok {
+			b.mu.Lock()
+			delete(b.attrCache, relPath)
+			b.mu.Unlock()
+		}
+		return protocol.NodeInfo{}, false
+	}
+	return entry.info, true
+}
+
+func (b *metadataBackend) cachedDirSnapshot(nodeID uint64) ([]protocol.DirEntry, bool) {
+	b.mu.RLock()
+	snapshot, ok := b.dirSnapshots[nodeID]
+	b.mu.RUnlock()
+	if !ok || !b.isFresh(snapshot.expiresAt) {
+		if ok {
+			b.mu.Lock()
+			delete(b.dirSnapshots, nodeID)
+			b.mu.Unlock()
+		}
+		return nil, false
+	}
+	return append([]protocol.DirEntry(nil), snapshot.entries...), true
+}
+
+func (b *metadataBackend) isNegativeCached(relPath string) bool {
+	b.mu.RLock()
+	entry, ok := b.negativeCache[relPath]
+	b.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	if !b.isFresh(entry.expiresAt) {
+		b.mu.Lock()
+		delete(b.negativeCache, relPath)
+		b.mu.Unlock()
+		return false
+	}
+	return true
+}
+
+func (b *metadataBackend) recordNegative(relPath string) {
+	b.mu.Lock()
+	b.negativeCache[relPath] = negativeCacheEntry{expiresAt: b.now().Add(b.cacheTTL)}
+	b.mu.Unlock()
+}
+
+func (b *metadataBackend) clearNegative(relPath string) {
+	b.mu.Lock()
+	delete(b.negativeCache, relPath)
+	b.mu.Unlock()
+}
+
+func (b *metadataBackend) withResolvedParent(info protocol.NodeInfo, relPath string, parentHint uint64) protocol.NodeInfo {
+	if relPath == "" {
+		info.ParentNodeID = info.NodeID
+		return info
+	}
+	if parentHint != 0 {
+		info.ParentNodeID = parentHint
+		return info
+	}
+	parentPath := filepath.Dir(relPath)
+	if parentPath == "." {
+		parentPath = ""
+	}
+	info.ParentNodeID = b.ensureNode(parentPath, 1)
+	return info
+}
+
+func (b *metadataBackend) prefetchRoot() error {
+	b.stats.rootPrefetches.Add(1)
+	_, err := b.refreshDirSnapshot(b.RootNodeID())
+	return err
 }
 
 func (b *metadataBackend) ensureNode(relPath string, parentHint uint64) uint64 {
@@ -288,6 +436,10 @@ func (b *metadataBackend) absPath(relPath string) string {
 	return filepath.Join(b.rootPath, relPath)
 }
 
+func (b *metadataBackend) isFresh(expiresAt time.Time) bool {
+	return !b.now().After(expiresAt)
+}
+
 func isNotExist(err error) bool {
 	return err != nil && os.IsNotExist(err)
 }
@@ -304,8 +456,4 @@ func isDir(err error) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(err.Error()), "is directory")
-}
-
-func fileTimeToRFC3339(t time.Time) string {
-	return protocol.NowRFC3339(t)
 }

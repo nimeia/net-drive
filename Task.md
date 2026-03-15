@@ -26,15 +26,17 @@
 - [x] Open / Read / Close
 - [x] 服务端本地目录只读后端基线
 - [x] 只读工作区浏览合同测试
-- [ ] metadata cache 基线
+- [x] metadata cache 基线（进入 Iter 3 后完成）
 - [ ] request dispatcher / error mapper 再收口
 
-## Iter 3 — metadata cache 与目录快照（计划）
+## Iter 3 — metadata cache 与目录快照
 
-- [ ] getattr cache
-- [ ] readdir cache
-- [ ] negative cache
-- [ ] root prefetch
+- [x] getattr cache
+- [x] readdir cache
+- [x] negative cache
+- [x] root prefetch
+- [x] cache TTL 刷新单测
+- [x] 目录快照缓存与刷新单测
 
 ## Iter 4 — 写入与保存链路（计划）
 

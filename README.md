@@ -6,6 +6,7 @@ This repository currently contains:
 - protocol and architecture documents for Iter 0
 - a control-plane baseline for Iter 1
 - an Iter 2 read-only metadata and file access baseline
+- an Iter 3 metadata cache and directory snapshot baseline
 - a TCP placeholder transport that can later be replaced by QUIC
 - minimal client/server demos and tests
 
@@ -20,6 +21,8 @@ The current code implements:
 - getattr
 - opendir / readdir
 - read-only open / read / close
+- metadata attr cache / negative cache / dir snapshot cache
+- root prefetch for initial directory snapshot warm-up
 
 It does not yet implement:
 - WinFsp integration

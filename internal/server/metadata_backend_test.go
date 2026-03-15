@@ -28,7 +28,7 @@ func TestMetadataBackendReadOnlyFlow(t *testing.T) {
 		t.Fatalf("unexpected size: got %d", entry.Size)
 	}
 
-	handleID, _, err := backend.OpenFile(entry.NodeID)
+	handleID, _, err := backend.OpenFile(entry.NodeID, false, false)
 	if err != nil {
 		t.Fatalf("OpenFile() error = %v", err)
 	}
@@ -52,6 +52,145 @@ func TestMetadataBackendReadOnlyFlow(t *testing.T) {
 	}
 	if len(resp.Entries) != 2 {
 		t.Fatalf("unexpected directory entry count: got %d want 2", len(resp.Entries))
+	}
+}
+
+func TestMetadataBackendWriteAndFlushFlow(t *testing.T) {
+	root := t.TempDir()
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+
+	createResp, handleID, err := backend.CreateFile(backend.RootNodeID(), "notes.txt", false)
+	if err != nil {
+		t.Fatalf("CreateFile() error = %v", err)
+	}
+	if createResp.Name != "notes.txt" {
+		t.Fatalf("create name = %q, want notes.txt", createResp.Name)
+	}
+
+	writeResp, newSize, err := backend.WriteFile(handleID, 0, []byte("iter4-data"))
+	if err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	if writeResp != len("iter4-data") || newSize != int64(len("iter4-data")) {
+		t.Fatalf("unexpected write result: written=%d size=%d", writeResp, newSize)
+	}
+	if err := backend.FlushHandle(handleID); err != nil {
+		t.Fatalf("FlushHandle() error = %v", err)
+	}
+	if err := backend.CloseHandle(handleID); err != nil {
+		t.Fatalf("CloseHandle() error = %v", err)
+	}
+
+	entry, err := backend.Lookup(backend.RootNodeID(), "notes.txt")
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	if entry.Size != int64(len("iter4-data")) {
+		t.Fatalf("entry size = %d, want %d", entry.Size, len("iter4-data"))
+	}
+
+	readHandle, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(read) error = %v", err)
+	}
+	defer func() { _ = backend.CloseHandle(readHandle) }()
+	data, eof, err := backend.ReadFile(readHandle, 0, 64)
+	if err != nil {
+		t.Fatalf("ReadFile() error = %v", err)
+	}
+	if string(data) != "iter4-data" || !eof {
+		t.Fatalf("unexpected persisted data: %q eof=%v", string(data), eof)
+	}
+}
+
+func TestMetadataBackendTruncateRenameAndDeleteOnClose(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+
+	entry, err := backend.Lookup(backend.RootNodeID(), "hello.txt")
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	writeHandle, _, err := backend.OpenFile(entry.NodeID, true, true)
+	if err != nil {
+		t.Fatalf("OpenFile(write) error = %v", err)
+	}
+	if _, size, err := backend.WriteFile(writeHandle, 0, []byte("abc")); err != nil || size != 3 {
+		t.Fatalf("WriteFile() error=%v size=%d", err, size)
+	}
+	if size, err := backend.TruncateHandle(writeHandle, 2); err != nil || size != 2 {
+		t.Fatalf("TruncateHandle() error=%v size=%d", err, size)
+	}
+	if err := backend.FlushHandle(writeHandle); err != nil {
+		t.Fatalf("FlushHandle() error = %v", err)
+	}
+	if err := backend.CloseHandle(writeHandle); err != nil {
+		t.Fatalf("CloseHandle() error = %v", err)
+	}
+
+	entry, err = backend.Lookup(backend.RootNodeID(), "hello.txt")
+	if err != nil {
+		t.Fatalf("Lookup(after truncate) error = %v", err)
+	}
+	if entry.Size != 2 {
+		t.Fatalf("size after truncate = %d, want 2", entry.Size)
+	}
+
+	_, tmpHandle, err := backend.CreateFile(backend.RootNodeID(), ".hello.tmp", false)
+	if err != nil {
+		t.Fatalf("CreateFile(tmp) error = %v", err)
+	}
+	if _, _, err := backend.WriteFile(tmpHandle, 0, []byte("replaced")); err != nil {
+		t.Fatalf("WriteFile(tmp) error = %v", err)
+	}
+	if err := backend.FlushHandle(tmpHandle); err != nil {
+		t.Fatalf("FlushHandle(tmp) error = %v", err)
+	}
+	if err := backend.CloseHandle(tmpHandle); err != nil {
+		t.Fatalf("CloseHandle(tmp) error = %v", err)
+	}
+	if _, err := backend.RenamePath(backend.RootNodeID(), ".hello.tmp", backend.RootNodeID(), "hello.txt", true); err != nil {
+		t.Fatalf("RenamePath() error = %v", err)
+	}
+
+	entry, err = backend.Lookup(backend.RootNodeID(), "hello.txt")
+	if err != nil {
+		t.Fatalf("Lookup(after rename) error = %v", err)
+	}
+	readHandle, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(renamed) error = %v", err)
+	}
+	data, _, err := backend.ReadFile(readHandle, 0, 64)
+	if err != nil {
+		t.Fatalf("ReadFile(renamed) error = %v", err)
+	}
+	_ = backend.CloseHandle(readHandle)
+	if string(data) != "replaced" {
+		t.Fatalf("renamed file data = %q, want replaced", string(data))
+	}
+
+	_, deleteHandle, err := backend.CreateFile(backend.RootNodeID(), "delete-me.tmp", false)
+	if err != nil {
+		t.Fatalf("CreateFile(delete) error = %v", err)
+	}
+	if err := backend.SetDeleteOnClose(deleteHandle, true); err != nil {
+		t.Fatalf("SetDeleteOnClose() error = %v", err)
+	}
+	if err := backend.CloseHandle(deleteHandle); err != nil {
+		t.Fatalf("CloseHandle(delete) error = %v", err)
+	}
+	if _, err := backend.Lookup(backend.RootNodeID(), "delete-me.tmp"); !isNotExist(err) {
+		t.Fatalf("expected delete-on-close file to be absent, got err=%v", err)
 	}
 }
 

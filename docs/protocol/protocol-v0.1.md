@@ -1,39 +1,32 @@
 # Developer Mount Protocol v0.1
 
-## 1. Scope
+## Scope
 
-Protocol v0.1 defines the early control-plane and read-only data-plane baseline for a Windows-first, editor-optimized remote filesystem.
+Protocol v0.1 is the bring-up contract for a Windows-first, editor-optimized remote filesystem.
 
-This revision freezes:
-- wire framing
-- common identifiers
-- header fields
-- control-channel message schema
-- read-only metadata and data message schema
-- error model
-- session lifecycle expectations
+Current implemented areas:
+- control channel: hello / auth / create-session / heartbeat
+- metadata channel: lookup / getattr / opendir / readdir / rename
+- data channel: open / create / read / write / flush / truncate / set-delete-on-close / close
 
-This revision does **not** yet implement:
-- watcher streaming
+Still deferred:
+- watcher event stream
 - recovery replay
-- file locking semantics
-- write / flush / rename semantics
+- lease / oplock-style cache negotiation
+- full Windows file semantic coverage
 
-## 2. Transport
+## Transport
 
-### 2.1 Current implementation
+Current implementation:
+- TCP placeholder transport
+- 4-byte big-endian frame length
+- 32-byte fixed header
+- JSON payload
 
-The current Iter 2 code uses a **TCP placeholder transport**.
+Planned evolution:
+- QUIC transport replacing TCP placeholder without changing higher-level message schema
 
-Wire format:
-1. 4-byte big-endian frame length
-2. fixed-size binary header
-3. payload bytes
-
-Payload encoding in Iter 2:
-- UTF-8 JSON
-
-## 3. Frame Header
+## Frame Header
 
 The header is always 32 bytes.
 
@@ -44,166 +37,119 @@ The header is always 32 bytes.
 | 5 | 1 | header_length | uint8 | bytes in header, current `32` |
 | 6 | 1 | channel | uint8 | logical channel id |
 | 7 | 1 | opcode | uint8 | message opcode |
-| 8 | 4 | flags | uint32 | request/response/error bits |
+| 8 | 4 | flags | uint32 | request / response / error bits |
 | 12 | 8 | request_id | uint64 | correlates request/response |
 | 20 | 8 | session_id | uint64 | `0` until a session exists |
-| 28 | 4 | payload_length | uint32 | number of payload bytes |
+| 28 | 4 | payload_length | uint32 | payload size |
 
-## 4. Channels
+### Channels
 
-| Value | Name | Purpose |
-|---:|---|---|
-| 1 | control | handshake, auth, session, heartbeat |
-| 2 | metadata | lookup, getattr, readdir |
-| 3 | data | open, read, close |
-| 4 | events | reserved |
-| 5 | recovery | reserved |
+| Value | Name |
+|---:|---|
+| 1 | control |
+| 2 | metadata |
+| 3 | data |
+| 4 | events |
+| 5 | recovery |
 
-## 5. Read-only Iter 2 opcodes
+### Flags
 
-### Metadata channel
-- `LookupReq / LookupResp`
-- `GetAttrReq / GetAttrResp`
-- `OpenDirReq / OpenDirResp`
-- `ReadDirReq / ReadDirResp`
+| Bit | Constant |
+|---:|---|
+| 0 | `FlagRequest` |
+| 1 | `FlagResponse` |
+| 2 | `FlagError` |
+| 3 | `FlagAckRequired` |
+| 4 | `FlagReplay` |
+| 5 | `FlagCompressed` |
 
-### Data channel
-- `OpenReq / OpenResp`
-- `ReadReq / ReadResp`
-- `CloseReq / CloseResp`
+## Implemented Opcodes
 
-## 6. Node model
+### Control
 
-### NodeInfo
+| Opcode | Name |
+|---:|---|
+| 1 | HelloReq |
+| 2 | HelloResp |
+| 3 | AuthReq |
+| 4 | AuthResp |
+| 5 | CreateSessionReq |
+| 6 | CreateSessionResp |
+| 7 | ResumeSessionReq |
+| 8 | ResumeSessionResp |
+| 9 | HeartbeatReq |
+| 10 | HeartbeatResp |
+| 11 | ErrorResp |
 
-```json
-{
-  "node_id": 2,
-  "parent_node_id": 1,
-  "name": "hello.txt",
-  "file_type": "file",
-  "size": 11,
-  "mode": 420,
-  "mod_time": "2026-03-15T00:00:00Z"
-}
-```
+### Metadata
 
-### LookupReq
+| Opcode | Name |
+|---:|---|
+| 20 | LookupReq |
+| 21 | LookupResp |
+| 22 | GetAttrReq |
+| 23 | GetAttrResp |
+| 24 | OpenDirReq |
+| 25 | OpenDirResp |
+| 26 | ReadDirReq |
+| 27 | ReadDirResp |
+| 28 | RenameReq |
+| 29 | RenameResp |
 
-```json
-{
-  "parent_node_id": 1,
-  "name": "hello.txt"
-}
-```
+### Data
 
-### LookupResp
+| Opcode | Name |
+|---:|---|
+| 40 | OpenReq |
+| 41 | OpenResp |
+| 42 | CreateReq |
+| 43 | CreateResp |
+| 44 | ReadReq |
+| 45 | ReadResp |
+| 46 | WriteReq |
+| 47 | WriteResp |
+| 48 | FlushReq |
+| 49 | FlushResp |
+| 50 | TruncateReq |
+| 51 | TruncateResp |
+| 52 | SetDeleteOnCloseReq |
+| 53 | SetDeleteOnCloseResp |
+| 54 | CloseReq |
+| 55 | CloseResp |
 
-```json
-{
-  "entry": {
-    "node_id": 2,
-    "parent_node_id": 1,
-    "name": "hello.txt",
-    "file_type": "file",
-    "size": 11,
-    "mode": 420,
-    "mod_time": "2026-03-15T00:00:00Z"
-  }
-}
-```
-
-### GetAttrReq
-
-```json
-{
-  "node_id": 1
-}
-```
-
-### OpenDirReq
-
-```json
-{
-  "node_id": 1
-}
-```
-
-### OpenDirResp
-
-```json
-{
-  "dir_cursor_id": 1001
-}
-```
-
-### ReadDirReq
-
-```json
-{
-  "dir_cursor_id": 1001,
-  "cookie": 0,
-  "max_entries": 64
-}
-```
-
-### ReadDirResp
-
-```json
-{
-  "entries": [
-    {
-      "node_id": 2,
-      "name": "hello.txt",
-      "file_type": "file",
-      "size": 11,
-      "mode": 420,
-      "mod_time": "2026-03-15T00:00:00Z"
-    }
-  ],
-  "next_cookie": 1,
-  "eof": false
-}
-```
+## Message Schema Highlights
 
 ### OpenReq
 
 ```json
 {
-  "node_id": 2
+  "node_id": 42,
+  "writable": true,
+  "truncate": false
 }
 ```
 
-### OpenResp
+### CreateReq
 
 ```json
 {
-  "handle_id": 2001,
-  "size": 11
+  "parent_node_id": 1,
+  "name": ".tmp-save",
+  "overwrite": false
 }
 ```
 
-### ReadReq
+### WriteReq
 
 ```json
 {
   "handle_id": 2001,
   "offset": 0,
-  "length": 5
+  "data": "base64-json-binary"
 }
 ```
 
-### ReadResp
-
-```json
-{
-  "data": "aGVsbG8=",
-  "eof": false,
-  "offset": 0
-}
-```
-
-### CloseReq
+### FlushReq
 
 ```json
 {
@@ -211,15 +157,37 @@ The header is always 32 bytes.
 }
 ```
 
-### CloseResp
+### TruncateReq
 
 ```json
 {
-  "closed": true
+  "handle_id": 2001,
+  "size": 3
 }
 ```
 
-## 7. Error Codes
+### RenameReq
+
+```json
+{
+  "src_parent_node_id": 1,
+  "src_name": ".tmp-save",
+  "dst_parent_node_id": 1,
+  "dst_name": "hello.txt",
+  "replace_existing": true
+}
+```
+
+### SetDeleteOnCloseReq
+
+```json
+{
+  "handle_id": 2002,
+  "delete_on_close": true
+}
+```
+
+## Error Codes
 
 | Code | Meaning |
 |---|---|
@@ -229,8 +197,20 @@ The header is always 32 bytes.
 | ERR_AUTH_REQUIRED | authentication missing or invalid |
 | ERR_SESSION_EXPIRED | session timed out |
 | ERR_SESSION_NOT_FOUND | requested session unknown |
-| ERR_NOT_FOUND | node / cursor / handle not found |
-| ERR_NOT_DIR | opendir on non-directory |
-| ERR_IS_DIR | open-file on directory |
-| ERR_INVALID_HANDLE | invalid read/close handle |
+| ERR_NOT_FOUND | missing path / node / handle target |
+| ERR_ALREADY_EXISTS | create or rename target already exists |
+| ERR_NOT_DIR | target is not a directory |
+| ERR_IS_DIR | target is a directory |
+| ERR_INVALID_HANDLE | handle is unknown or closed |
+| ERR_ACCESS_DENIED | write/open mode denied |
 | ERR_INTERNAL | internal server error |
+
+## Session Rules
+
+1. Client must send `HelloReq` first.
+2. Until Hello succeeds, only Hello is legal.
+3. After Hello succeeds, client may send `AuthReq`.
+4. After Auth succeeds, client may send `CreateSessionReq`.
+5. Metadata and data channels require an active session.
+6. After session creation, client must send `HeartbeatReq` before lease expiry.
+7. ResumeSession is reserved but not implemented in Iter 4.

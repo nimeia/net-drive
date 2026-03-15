@@ -17,17 +17,15 @@
 - [x] 增加协议编解码单测
 - [x] 增加服务端集成测试
 - [ ] 补充 ResumeSession 占位处理
-- [ ] 输出迭代总结与下一阶段接口空壳
+- [x] 输出迭代总结与下一阶段接口空壳
 
 ## Iter 2 — 只读挂载 MVP
 
 - [x] Lookup / GetAttr
 - [x] OpenDir / ReadDir
 - [x] Open / Read / Close
-- [x] 服务端本地目录只读后端基线
+- [x] metadata cache 基线接入后端
 - [x] 只读工作区浏览合同测试
-- [x] metadata cache 基线（进入 Iter 3 后完成）
-- [ ] request dispatcher / error mapper 再收口
 
 ## Iter 3 — metadata cache 与目录快照
 
@@ -35,16 +33,14 @@
 - [x] readdir cache
 - [x] negative cache
 - [x] root prefetch
-- [x] cache TTL 刷新单测
-- [x] 目录快照缓存与刷新单测
 
-## Iter 4 — 写入与保存链路（计划）
+## Iter 4 — 写入与保存链路
 
-- [ ] Create / Write / Flush / Close
-- [ ] Truncate
-- [ ] Rename / Replace
-- [ ] delete-on-close
-- [ ] save path 合同测试
+- [x] Create / Write / Flush / Close
+- [x] Truncate
+- [x] Rename / Replace
+- [x] delete-on-close
+- [x] 保存链路与缓存失效测试
 
 ## Iter 5 — watcher 与 journal（计划）
 

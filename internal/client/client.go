@@ -43,7 +43,7 @@ func (c *Client) Close() error {
 func (c *Client) Hello() (protocol.HelloResp, error) {
 	req := protocol.HelloReq{
 		ClientName:                "devmount-client",
-		ClientVersion:             "0.2.0",
+		ClientVersion:             "0.4.0",
 		SupportedProtocolVersions: []uint8{protocol.Version},
 		Capabilities:              protocol.DefaultCapabilities(),
 	}
@@ -55,18 +55,16 @@ func (c *Client) Hello() (protocol.HelloResp, error) {
 }
 
 func (c *Client) Auth(token string) (protocol.AuthResp, error) {
-	req := protocol.AuthReq{Scheme: "dev-token", Token: token}
 	var resp protocol.AuthResp
-	if err := c.request(protocol.ChannelControl, protocol.OpcodeAuthReq, req, &resp); err != nil {
+	if err := c.request(protocol.ChannelControl, protocol.OpcodeAuthReq, protocol.AuthReq{Scheme: "dev-token", Token: token}, &resp); err != nil {
 		return protocol.AuthResp{}, err
 	}
 	return resp, nil
 }
 
 func (c *Client) CreateSession(clientInstanceID string, leaseSeconds uint32) (protocol.CreateSessionResp, error) {
-	req := protocol.CreateSessionReq{ClientInstanceID: clientInstanceID, RequestedLeaseSeconds: leaseSeconds, MountName: "workspace-dev"}
 	var resp protocol.CreateSessionResp
-	if err := c.request(protocol.ChannelControl, protocol.OpcodeCreateSessionReq, req, &resp); err != nil {
+	if err := c.request(protocol.ChannelControl, protocol.OpcodeCreateSessionReq, protocol.CreateSessionReq{ClientInstanceID: clientInstanceID, RequestedLeaseSeconds: leaseSeconds, MountName: "workspace-dev"}, &resp); err != nil {
 		return protocol.CreateSessionResp{}, err
 	}
 	c.SessionID = resp.SessionID
@@ -74,9 +72,8 @@ func (c *Client) CreateSession(clientInstanceID string, leaseSeconds uint32) (pr
 }
 
 func (c *Client) Heartbeat() (protocol.HeartbeatResp, error) {
-	req := protocol.HeartbeatReq{SessionID: c.SessionID, ClientTime: protocol.NowRFC3339(time.Now())}
 	var resp protocol.HeartbeatResp
-	if err := c.request(protocol.ChannelControl, protocol.OpcodeHeartbeatReq, req, &resp); err != nil {
+	if err := c.request(protocol.ChannelControl, protocol.OpcodeHeartbeatReq, protocol.HeartbeatReq{SessionID: c.SessionID, ClientTime: protocol.NowRFC3339(time.Now())}, &resp); err != nil {
 		return protocol.HeartbeatResp{}, err
 	}
 	return resp, nil
@@ -114,10 +111,34 @@ func (c *Client) ReadDir(dirCursorID uint64, cookie uint64, maxEntries uint32) (
 	return resp, nil
 }
 
-func (c *Client) Open(nodeID uint64) (protocol.OpenResp, error) {
+func (c *Client) Rename(srcParentNodeID uint64, srcName string, dstParentNodeID uint64, dstName string, replace bool) (protocol.RenameResp, error) {
+	var resp protocol.RenameResp
+	if err := c.request(protocol.ChannelMetadata, protocol.OpcodeRenameReq, protocol.RenameReq{SrcParentNodeID: srcParentNodeID, SrcName: srcName, DstParentNodeID: dstParentNodeID, DstName: dstName, ReplaceExisting: replace}, &resp); err != nil {
+		return protocol.RenameResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) OpenRead(nodeID uint64) (protocol.OpenResp, error) {
+	return c.open(nodeID, false, false)
+}
+
+func (c *Client) OpenWrite(nodeID uint64, truncate bool) (protocol.OpenResp, error) {
+	return c.open(nodeID, true, truncate)
+}
+
+func (c *Client) open(nodeID uint64, writable, truncate bool) (protocol.OpenResp, error) {
 	var resp protocol.OpenResp
-	if err := c.request(protocol.ChannelData, protocol.OpcodeOpenReq, protocol.OpenReq{NodeID: nodeID}, &resp); err != nil {
+	if err := c.request(protocol.ChannelData, protocol.OpcodeOpenReq, protocol.OpenReq{NodeID: nodeID, Writable: writable, Truncate: truncate}, &resp); err != nil {
 		return protocol.OpenResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Create(parentNodeID uint64, name string, overwrite bool) (protocol.CreateResp, error) {
+	var resp protocol.CreateResp
+	if err := c.request(protocol.ChannelData, protocol.OpcodeCreateReq, protocol.CreateReq{ParentNodeID: parentNodeID, Name: name, Overwrite: overwrite}, &resp); err != nil {
+		return protocol.CreateResp{}, err
 	}
 	return resp, nil
 }
@@ -126,6 +147,38 @@ func (c *Client) Read(handleID uint64, offset int64, length uint32) (protocol.Re
 	var resp protocol.ReadResp
 	if err := c.request(protocol.ChannelData, protocol.OpcodeReadReq, protocol.ReadReq{HandleID: handleID, Offset: offset, Length: length}, &resp); err != nil {
 		return protocol.ReadResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Write(handleID uint64, offset int64, data []byte) (protocol.WriteResp, error) {
+	var resp protocol.WriteResp
+	if err := c.request(protocol.ChannelData, protocol.OpcodeWriteReq, protocol.WriteReq{HandleID: handleID, Offset: offset, Data: data}, &resp); err != nil {
+		return protocol.WriteResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Flush(handleID uint64) (protocol.FlushResp, error) {
+	var resp protocol.FlushResp
+	if err := c.request(protocol.ChannelData, protocol.OpcodeFlushReq, protocol.FlushReq{HandleID: handleID}, &resp); err != nil {
+		return protocol.FlushResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Truncate(handleID uint64, size int64) (protocol.TruncateResp, error) {
+	var resp protocol.TruncateResp
+	if err := c.request(protocol.ChannelData, protocol.OpcodeTruncateReq, protocol.TruncateReq{HandleID: handleID, Size: size}, &resp); err != nil {
+		return protocol.TruncateResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) SetDeleteOnClose(handleID uint64, enabled bool) (protocol.SetDeleteOnCloseResp, error) {
+	var resp protocol.SetDeleteOnCloseResp
+	if err := c.request(protocol.ChannelData, protocol.OpcodeSetDeleteOnCloseReq, protocol.SetDeleteOnCloseReq{HandleID: handleID, DeleteOnClose: enabled}, &resp); err != nil {
+		return protocol.SetDeleteOnCloseResp{}, err
 	}
 	return resp, nil
 }
@@ -226,6 +279,13 @@ func decodeInto(payload []byte, out any) error {
 		}
 		*target = resp
 		return nil
+	case *protocol.RenameResp:
+		resp, err := transport.DecodePayload[protocol.RenameResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
 	case *protocol.OpenResp:
 		resp, err := transport.DecodePayload[protocol.OpenResp](payload)
 		if err != nil {
@@ -233,8 +293,43 @@ func decodeInto(payload []byte, out any) error {
 		}
 		*target = resp
 		return nil
+	case *protocol.CreateResp:
+		resp, err := transport.DecodePayload[protocol.CreateResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
 	case *protocol.ReadResp:
 		resp, err := transport.DecodePayload[protocol.ReadResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.WriteResp:
+		resp, err := transport.DecodePayload[protocol.WriteResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.FlushResp:
+		resp, err := transport.DecodePayload[protocol.FlushResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.TruncateResp:
+		resp, err := transport.DecodePayload[protocol.TruncateResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.SetDeleteOnCloseResp:
+		resp, err := transport.DecodePayload[protocol.SetDeleteOnCloseResp](payload)
 		if err != nil {
 			return err
 		}

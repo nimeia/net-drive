@@ -41,12 +41,25 @@ const (
 	OpcodeOpenDirResp Opcode = 25
 	OpcodeReadDirReq  Opcode = 26
 	OpcodeReadDirResp Opcode = 27
-	OpcodeOpenReq     Opcode = 28
-	OpcodeOpenResp    Opcode = 29
-	OpcodeReadReq     Opcode = 30
-	OpcodeReadResp    Opcode = 31
-	OpcodeCloseReq    Opcode = 32
-	OpcodeCloseResp   Opcode = 33
+	OpcodeRenameReq   Opcode = 28
+	OpcodeRenameResp  Opcode = 29
+
+	OpcodeOpenReq              Opcode = 40
+	OpcodeOpenResp             Opcode = 41
+	OpcodeCreateReq            Opcode = 42
+	OpcodeCreateResp           Opcode = 43
+	OpcodeReadReq              Opcode = 44
+	OpcodeReadResp             Opcode = 45
+	OpcodeWriteReq             Opcode = 46
+	OpcodeWriteResp            Opcode = 47
+	OpcodeFlushReq             Opcode = 48
+	OpcodeFlushResp            Opcode = 49
+	OpcodeTruncateReq          Opcode = 50
+	OpcodeTruncateResp         Opcode = 51
+	OpcodeSetDeleteOnCloseReq  Opcode = 52
+	OpcodeSetDeleteOnCloseResp Opcode = 53
+	OpcodeCloseReq             Opcode = 54
+	OpcodeCloseResp            Opcode = 55
 )
 
 const (
@@ -204,13 +217,38 @@ type ReadDirResp struct {
 	EOF        bool       `json:"eof"`
 }
 
+type RenameReq struct {
+	SrcParentNodeID uint64 `json:"src_parent_node_id"`
+	SrcName         string `json:"src_name"`
+	DstParentNodeID uint64 `json:"dst_parent_node_id"`
+	DstName         string `json:"dst_name"`
+	ReplaceExisting bool   `json:"replace_existing"`
+}
+
+type RenameResp struct {
+	Entry NodeInfo `json:"entry"`
+}
+
 type OpenReq struct {
-	NodeID uint64 `json:"node_id"`
+	NodeID   uint64 `json:"node_id"`
+	Writable bool   `json:"writable"`
+	Truncate bool   `json:"truncate"`
 }
 
 type OpenResp struct {
 	HandleID uint64 `json:"handle_id"`
 	Size     int64  `json:"size"`
+}
+
+type CreateReq struct {
+	ParentNodeID uint64 `json:"parent_node_id"`
+	Name         string `json:"name"`
+	Overwrite    bool   `json:"overwrite"`
+}
+
+type CreateResp struct {
+	Entry    NodeInfo `json:"entry"`
+	HandleID uint64   `json:"handle_id"`
 }
 
 type ReadReq struct {
@@ -223,6 +261,43 @@ type ReadResp struct {
 	Data   []byte `json:"data"`
 	EOF    bool   `json:"eof"`
 	Offset int64  `json:"offset"`
+}
+
+type WriteReq struct {
+	HandleID uint64 `json:"handle_id"`
+	Offset   int64  `json:"offset"`
+	Data     []byte `json:"data"`
+}
+
+type WriteResp struct {
+	BytesWritten int   `json:"bytes_written"`
+	NewSize      int64 `json:"new_size"`
+}
+
+type FlushReq struct {
+	HandleID uint64 `json:"handle_id"`
+}
+
+type FlushResp struct {
+	Flushed bool `json:"flushed"`
+}
+
+type TruncateReq struct {
+	HandleID uint64 `json:"handle_id"`
+	Size     int64  `json:"size"`
+}
+
+type TruncateResp struct {
+	Size int64 `json:"size"`
+}
+
+type SetDeleteOnCloseReq struct {
+	HandleID      uint64 `json:"handle_id"`
+	DeleteOnClose bool   `json:"delete_on_close"`
+}
+
+type SetDeleteOnCloseResp struct {
+	DeleteOnClose bool `json:"delete_on_close"`
 }
 
 type CloseReq struct {
@@ -244,6 +319,7 @@ const (
 	ErrSessionNotFound    ErrorCode = "ERR_SESSION_NOT_FOUND"
 	ErrCapabilityMismatch ErrorCode = "ERR_CAPABILITY_MISMATCH"
 	ErrNotFound           ErrorCode = "ERR_NOT_FOUND"
+	ErrAlreadyExists      ErrorCode = "ERR_ALREADY_EXISTS"
 	ErrNotDir             ErrorCode = "ERR_NOT_DIR"
 	ErrIsDir              ErrorCode = "ERR_IS_DIR"
 	ErrInvalidHandle      ErrorCode = "ERR_INVALID_HANDLE"
@@ -262,7 +338,7 @@ func DefaultCapabilities() CapabilitySet {
 	return CapabilitySet{
 		Transport: []string{"tcp-json"},
 		Channels:  []string{"control", "metadata", "data"},
-		Features:  []string{"auth-basic", "session-create", "heartbeat", "lookup", "getattr", "readdir", "read-only-open"},
+		Features:  []string{"auth-basic", "session-create", "heartbeat", "lookup", "getattr", "readdir", "read-open", "create", "write", "flush", "truncate", "rename", "delete-on-close"},
 	}
 }
 

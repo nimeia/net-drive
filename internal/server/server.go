@@ -72,7 +72,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
-	state := connectionState{serverName: "devmount-server", serverVersion: "0.2.0"}
+	state := connectionState{serverName: "devmount-server", serverVersion: "0.4.0"}
 	for {
 		header, payload, err := transport.DecodeFrame(conn)
 		if err != nil {
@@ -148,7 +148,7 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		}
 		state.authenticated = true
 		state.principalID = "developer"
-		resp := protocol.AuthResp{Authenticated: true, PrincipalID: state.principalID, DisplayName: "Developer", GrantedFeature: []string{"session-create", "heartbeat", "lookup", "getattr", "readdir", "read-only-open"}}
+		resp := protocol.AuthResp{Authenticated: true, PrincipalID: state.principalID, DisplayName: "Developer", GrantedFeature: protocol.DefaultCapabilities().Features}
 		s.writeResponse(conn, header, protocol.OpcodeAuthResp, 0, resp)
 	case protocol.OpcodeCreateSessionReq:
 		if !state.authenticated {
@@ -192,7 +192,7 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		resp := protocol.HeartbeatResp{SessionID: session.ID, ServerTime: protocol.NowRFC3339(now), ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
 		s.writeResponse(conn, header, protocol.OpcodeHeartbeatResp, session.ID, resp)
 	default:
-		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported opcode %d", header.Opcode), false, nil)
+		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported control opcode %d", header.Opcode), false, nil)
 	}
 }
 
@@ -246,6 +246,18 @@ func (s *Server) dispatchMetadata(conn net.Conn, header protocol.Header, payload
 			return
 		}
 		s.writeResponse(conn, header, protocol.OpcodeReadDirResp, header.SessionID, resp)
+	case protocol.OpcodeRenameReq:
+		req, err := transport.DecodePayload[protocol.RenameReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid rename payload", false, nil)
+			return
+		}
+		entry, err := s.Backend.RenamePath(req.SrcParentNodeID, req.SrcName, req.DstParentNodeID, req.DstName, req.ReplaceExisting)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeRenameResp, header.SessionID, protocol.RenameResp{Entry: entry})
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported metadata opcode %d", header.Opcode), false, nil)
 	}
@@ -259,12 +271,24 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid open payload", false, nil)
 			return
 		}
-		handleID, size, err := s.Backend.OpenFile(req.NodeID)
+		handleID, size, err := s.Backend.OpenFile(req.NodeID, req.Writable, req.Truncate)
 		if err != nil {
 			s.writeBackendError(conn, header, err)
 			return
 		}
 		s.writeResponse(conn, header, protocol.OpcodeOpenResp, header.SessionID, protocol.OpenResp{HandleID: handleID, Size: size})
+	case protocol.OpcodeCreateReq:
+		req, err := transport.DecodePayload[protocol.CreateReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid create payload", false, nil)
+			return
+		}
+		entry, handleID, err := s.Backend.CreateFile(req.ParentNodeID, req.Name, req.Overwrite)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeCreateResp, header.SessionID, protocol.CreateResp{Entry: entry, HandleID: handleID})
 	case protocol.OpcodeReadReq:
 		req, err := transport.DecodePayload[protocol.ReadReq](payload)
 		if err != nil {
@@ -277,6 +301,52 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			return
 		}
 		s.writeResponse(conn, header, protocol.OpcodeReadResp, header.SessionID, protocol.ReadResp{Data: data, EOF: eof, Offset: req.Offset})
+	case protocol.OpcodeWriteReq:
+		req, err := transport.DecodePayload[protocol.WriteReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid write payload", false, nil)
+			return
+		}
+		written, newSize, err := s.Backend.WriteFile(req.HandleID, req.Offset, req.Data)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeWriteResp, header.SessionID, protocol.WriteResp{BytesWritten: written, NewSize: newSize})
+	case protocol.OpcodeFlushReq:
+		req, err := transport.DecodePayload[protocol.FlushReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid flush payload", false, nil)
+			return
+		}
+		if err := s.Backend.FlushHandle(req.HandleID); err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeFlushResp, header.SessionID, protocol.FlushResp{Flushed: true})
+	case protocol.OpcodeTruncateReq:
+		req, err := transport.DecodePayload[protocol.TruncateReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid truncate payload", false, nil)
+			return
+		}
+		size, err := s.Backend.TruncateHandle(req.HandleID, req.Size)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeTruncateResp, header.SessionID, protocol.TruncateResp{Size: size})
+	case protocol.OpcodeSetDeleteOnCloseReq:
+		req, err := transport.DecodePayload[protocol.SetDeleteOnCloseReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid delete-on-close payload", false, nil)
+			return
+		}
+		if err := s.Backend.SetDeleteOnClose(req.HandleID, req.DeleteOnClose); err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeSetDeleteOnCloseResp, header.SessionID, protocol.SetDeleteOnCloseResp{DeleteOnClose: req.DeleteOnClose})
 	case protocol.OpcodeCloseReq:
 		req, err := transport.DecodePayload[protocol.CloseReq](payload)
 		if err != nil {
@@ -331,6 +401,12 @@ func (s *Server) writeBackendError(conn net.Conn, reqHeader protocol.Header, err
 	switch {
 	case errors.Is(err, os.ErrNotExist):
 		s.writeError(conn, reqHeader, protocol.ErrNotFound, "not found", false, nil)
+	case errors.Is(err, errAlreadyExists) || errors.Is(err, os.ErrExist):
+		s.writeError(conn, reqHeader, protocol.ErrAlreadyExists, "already exists", false, nil)
+	case errors.Is(err, errInvalidHandle):
+		s.writeError(conn, reqHeader, protocol.ErrInvalidHandle, "invalid handle", false, nil)
+	case errors.Is(err, errAccessDenied):
+		s.writeError(conn, reqHeader, protocol.ErrAccessDenied, "access denied", false, nil)
 	case isNotDir(err):
 		s.writeError(conn, reqHeader, protocol.ErrNotDir, "not a directory", false, nil)
 	case isDir(err):

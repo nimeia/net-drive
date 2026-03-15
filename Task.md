@@ -55,12 +55,12 @@
 - [x] cache revalidate
 - [x] watch resubscribe
 
-## Iter 7 — 编辑器专项优化（计划）
+## Iter 7 — 编辑器专项优化
 
-- [ ] workspace profile
-- [ ] 热目录预热
-- [ ] 小文件快取
-- [ ] 请求优先级调度
+- [x] workspace profile
+- [x] 热目录预热
+- [x] 小文件快取
+- [x] 请求优先级调度
 
 ## Iter 8 — 诊断与产品化（计划）
 

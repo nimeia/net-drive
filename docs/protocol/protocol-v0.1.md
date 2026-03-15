@@ -266,3 +266,16 @@ Focused Iter 6 recovery tests now cover:
 - per-handle recovery success and per-handle failure
 - node revalidation for existing and deleted entries
 - watch resubscribe carrying forward the last acked sequence
+
+
+## 10. Iter 7 Editor-Focused Backend Optimizations
+
+Iter 7 does not add new wire messages.
+
+The optimization work is currently backend-local and includes:
+- workspace profile inference from common development repositories
+- root-level hot dir / hot file prefetch
+- small-file cache for editor-relevant files
+- priority-aware prefetch scheduling (high before normal)
+
+This keeps the protocol stable while improving the latency of existing `Lookup / GetAttr / OpenDir / Read / Close` paths.

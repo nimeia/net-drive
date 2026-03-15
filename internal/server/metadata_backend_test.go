@@ -207,6 +207,24 @@ func TestMetadataBackendAttrCacheRefreshesAfterTTL(t *testing.T) {
 	fakeNow := time.Date(2026, 3, 15, 3, 0, 0, 0, time.UTC)
 	backend.now = func() time.Time { return fakeNow }
 	backend.cacheTTL = time.Second
+	backend.mu.Lock()
+	backend.attrCache = map[string]attrCacheEntry{}
+	backend.dirSnapshots = map[uint64]dirSnapshotEntry{}
+	backend.negativeCache = map[string]negativeCacheEntry{}
+	backend.smallFileCache = map[string]smallFileCacheEntry{}
+	backend.mu.Unlock()
+	backend.mu.Lock()
+	backend.attrCache = map[string]attrCacheEntry{}
+	backend.dirSnapshots = map[uint64]dirSnapshotEntry{}
+	backend.negativeCache = map[string]negativeCacheEntry{}
+	backend.smallFileCache = map[string]smallFileCacheEntry{}
+	backend.mu.Unlock()
+	backend.mu.Lock()
+	backend.attrCache = map[string]attrCacheEntry{}
+	backend.dirSnapshots = map[uint64]dirSnapshotEntry{}
+	backend.negativeCache = map[string]negativeCacheEntry{}
+	backend.smallFileCache = map[string]smallFileCacheEntry{}
+	backend.mu.Unlock()
 
 	entry, err := backend.Lookup(backend.RootNodeID(), "hello.txt")
 	if err != nil {
@@ -352,5 +370,140 @@ func TestMetadataBackendDirSnapshotCacheAndRootPrefetch(t *testing.T) {
 	}
 	if len(listing.Entries) != 2 {
 		t.Fatalf("refreshed entry count = %d, want 2", len(listing.Entries))
+	}
+}
+
+func TestMetadataBackendSmallFileCacheAndInvalidation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	entry, err := backend.Lookup(backend.RootNodeID(), "package.json")
+	if err != nil {
+		t.Fatalf("Lookup() error = %v", err)
+	}
+	h, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(read) error = %v", err)
+	}
+	data, eof, err := backend.ReadFile(h, 0, 64)
+	if err != nil {
+		t.Fatalf("ReadFile(first) error = %v", err)
+	}
+	if string(data) != `{"name":"demo"}` || !eof {
+		t.Fatalf("unexpected first read result %q eof=%v", string(data), eof)
+	}
+	if _, _, err := backend.ReadFile(h, 0, 64); err != nil {
+		t.Fatalf("ReadFile(second) error = %v", err)
+	}
+	_ = backend.CloseHandle(h)
+	stats := backend.Stats()
+	if stats.SmallFileHits == 0 {
+		t.Fatalf("expected small-file cache hit after repeated read")
+	}
+
+	wh, _, err := backend.OpenFile(entry.NodeID, true, true)
+	if err != nil {
+		t.Fatalf("OpenFile(write) error = %v", err)
+	}
+	if _, _, err := backend.WriteFile(wh, 0, []byte(`{"name":"demo2"}`)); err != nil {
+		t.Fatalf("WriteFile(update) error = %v", err)
+	}
+	if err := backend.FlushHandle(wh); err != nil {
+		t.Fatalf("FlushHandle(update) error = %v", err)
+	}
+	if err := backend.CloseHandle(wh); err != nil {
+		t.Fatalf("CloseHandle(update) error = %v", err)
+	}
+	rh, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(re-read) error = %v", err)
+	}
+	data, eof, err = backend.ReadFile(rh, 0, 64)
+	if err != nil {
+		t.Fatalf("ReadFile(after update) error = %v", err)
+	}
+	_ = backend.CloseHandle(rh)
+	if string(data) != `{"name":"demo2"}` || !eof {
+		t.Fatalf("unexpected updated read result %q eof=%v", string(data), eof)
+	}
+}
+
+func TestMetadataBackendWorkspaceProfileAndPrefetchPriority(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(package.json) error = %v", err)
+	}
+	if err := os.Mkdir(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatalf("Mkdir(src) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "main.ts"), []byte("export const x = 1;"), 0o644); err != nil {
+		t.Fatalf("WriteFile(main.ts) error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	profile := backend.Profile()
+	if !profile.IsHotDir("src") {
+		t.Fatalf("expected src to be a hot dir")
+	}
+	if !profile.IsHotFile("package.json") {
+		t.Fatalf("expected package.json to be a hot file")
+	}
+	stats := backend.Stats()
+	if stats.RootPrefetches == 0 {
+		t.Fatalf("expected root prefetch to run")
+	}
+	if stats.HotDirPrefetches == 0 {
+		t.Fatalf("expected hot dir prefetches")
+	}
+	if stats.HotFilePrefetches == 0 {
+		t.Fatalf("expected hot file prefetches")
+	}
+	if stats.HighPriorityPrefetches == 0 {
+		t.Fatalf("expected high priority prefetch work")
+	}
+	if stats.NormalPriorityPrefetches == 0 {
+		t.Fatalf("expected normal priority prefetch work")
+	}
+	entry, err := backend.Lookup(backend.RootNodeID(), "package.json")
+	if err != nil {
+		t.Fatalf("Lookup(package.json) error = %v", err)
+	}
+	h, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(package.json) error = %v", err)
+	}
+	if _, _, err := backend.ReadFile(h, 0, 64); err != nil {
+		t.Fatalf("ReadFile(package.json) error = %v", err)
+	}
+	_ = backend.CloseHandle(h)
+	stats = backend.Stats()
+	if stats.SmallFileHits == 0 {
+		t.Fatalf("expected prefetched small file cache to be used")
+	}
+	srcEntry, err := backend.Lookup(backend.RootNodeID(), "src")
+	if err != nil {
+		t.Fatalf("Lookup(src) error = %v", err)
+	}
+	cursorID, err := backend.OpenDir(srcEntry.NodeID)
+	if err != nil {
+		t.Fatalf("OpenDir(src) error = %v", err)
+	}
+	listing, err := backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(src) error = %v", err)
+	}
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "main.ts" {
+		t.Fatalf("unexpected src listing: %+v", listing.Entries)
+	}
+	stats = backend.Stats()
+	if stats.DirSnapshotHits == 0 {
+		t.Fatalf("expected prefetched dir snapshot hit for src")
 	}
 }

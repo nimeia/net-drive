@@ -57,16 +57,18 @@ type metadataBackend struct {
 	nextCursorID atomic.Uint64
 	nextHandleID atomic.Uint64
 
-	stats metadataCacheStats
+	stats   metadataCacheStats
+	profile workspaceProfile
 
-	mu            sync.RWMutex
-	nodesByID     map[uint64]nodeRecord
-	nodesByPath   map[string]uint64
-	cursors       map[uint64]dirCursor
-	handles       map[uint64]*fileHandle
-	attrCache     map[string]attrCacheEntry
-	negativeCache map[string]negativeCacheEntry
-	dirSnapshots  map[uint64]dirSnapshotEntry
+	mu             sync.RWMutex
+	nodesByID      map[uint64]nodeRecord
+	nodesByPath    map[string]uint64
+	cursors        map[uint64]dirCursor
+	handles        map[uint64]*fileHandle
+	attrCache      map[string]attrCacheEntry
+	negativeCache  map[string]negativeCacheEntry
+	dirSnapshots   map[uint64]dirSnapshotEntry
+	smallFileCache map[string]smallFileCacheEntry
 }
 
 func newMetadataBackend(rootPath string) (*metadataBackend, error) {
@@ -82,16 +84,18 @@ func newMetadataBackend(rootPath string) (*metadataBackend, error) {
 		return nil, fmt.Errorf("root path must be a directory")
 	}
 	b := &metadataBackend{
-		rootPath:      absRoot,
-		now:           time.Now,
-		cacheTTL:      defaultMetadataCacheTTL,
-		nodesByID:     make(map[uint64]nodeRecord),
-		nodesByPath:   make(map[string]uint64),
-		cursors:       make(map[uint64]dirCursor),
-		handles:       make(map[uint64]*fileHandle),
-		attrCache:     make(map[string]attrCacheEntry),
-		negativeCache: make(map[string]negativeCacheEntry),
-		dirSnapshots:  make(map[uint64]dirSnapshotEntry),
+		rootPath:       absRoot,
+		now:            time.Now,
+		cacheTTL:       defaultMetadataCacheTTL,
+		profile:        inferWorkspaceProfile(absRoot),
+		nodesByID:      make(map[uint64]nodeRecord),
+		nodesByPath:    make(map[string]uint64),
+		cursors:        make(map[uint64]dirCursor),
+		handles:        make(map[uint64]*fileHandle),
+		attrCache:      make(map[string]attrCacheEntry),
+		negativeCache:  make(map[string]negativeCacheEntry),
+		dirSnapshots:   make(map[uint64]dirSnapshotEntry),
+		smallFileCache: make(map[string]smallFileCacheEntry),
 	}
 	b.nextNodeID.Store(1)
 	b.nextCursorID.Store(1000)
@@ -107,9 +111,9 @@ func newMetadataBackend(rootPath string) (*metadataBackend, error) {
 
 func (b *metadataBackend) RootNodeID() uint64 { return 1 }
 
-func (b *metadataBackend) Stats() MetadataCacheStats {
-	return b.stats.snapshot()
-}
+func (b *metadataBackend) Stats() MetadataCacheStats { return b.stats.snapshot() }
+
+func (b *metadataBackend) Profile() workspaceProfile { return b.profile }
 
 func (b *metadataBackend) Lookup(parentNodeID uint64, name string) (protocol.NodeInfo, error) {
 	if !isValidSingleName(name) {
@@ -203,7 +207,9 @@ func (b *metadataBackend) OpenFile(nodeID uint64, writable, truncate bool) (uint
 	b.mu.Lock()
 	b.handles[handleID] = &fileHandle{id: handleID, nodeID: nodeID, parentID: rec.parentID, relPath: rec.relPath, file: f, size: currentSize, writable: writable}
 	b.mu.Unlock()
-	b.invalidatePath(rec.relPath, rec.parentID)
+	if writable || truncate {
+		b.invalidatePath(rec.relPath, rec.parentID)
+	}
 	return handleID, currentSize, nil
 }
 
@@ -261,6 +267,34 @@ func (b *metadataBackend) ReadFile(handleID uint64, offset int64, length uint32)
 	}
 	if offset < 0 {
 		return nil, false, fmt.Errorf("invalid offset")
+	}
+	if !h.writable {
+		if data, ok := b.cachedSmallFileData(h.relPath); ok {
+			b.stats.smallFileHits.Add(1)
+			if offset > int64(len(data)) {
+				return []byte{}, true, nil
+			}
+			end := int(offset) + int(length)
+			if length == 0 || end > len(data) {
+				end = len(data)
+			}
+			slice := append([]byte(nil), data[offset:int64(end)]...)
+			eof := int64(end) >= int64(len(data))
+			return slice, eof, nil
+		}
+		b.stats.smallFileMisses.Add(1)
+		if data, ok, err := b.loadSmallFileCache(h.relPath); err == nil && ok {
+			if offset > int64(len(data)) {
+				return []byte{}, true, nil
+			}
+			end := int(offset) + int(length)
+			if length == 0 || end > len(data) {
+				end = len(data)
+			}
+			slice := append([]byte(nil), data[offset:int64(end)]...)
+			eof := int64(end) >= int64(len(data))
+			return slice, eof, nil
+		}
 	}
 	if length == 0 {
 		length = 4096
@@ -437,15 +471,22 @@ func (b *metadataBackend) nodeInfoForPath(relPath string, parentHint uint64) (pr
 	b.stats.negativeMisses.Add(1)
 	if info, ok := b.cachedNodeInfo(relPath); ok {
 		b.stats.attrHits.Add(1)
-		return b.withResolvedParent(info, relPath, parentHint), nil
+		resolved := b.withResolvedParent(info, relPath, parentHint)
+		b.maybeWarmNode(relPath, resolved)
+		return resolved, nil
 	}
 	b.stats.attrMisses.Add(1)
-	return b.refreshNodeInfo(relPath, parentHint)
+	info, err := b.refreshNodeInfo(relPath, parentHint)
+	if err == nil {
+		b.maybeWarmNode(relPath, info)
+	}
+	return info, err
 }
 
 func (b *metadataBackend) snapshotDir(nodeID uint64) ([]protocol.DirEntry, error) {
 	if entries, ok := b.cachedDirSnapshot(nodeID); ok {
 		b.stats.dirSnapshotHits.Add(1)
+		b.maybeWarmDir(nodeID)
 		return entries, nil
 	}
 	b.stats.dirSnapshotMisses.Add(1)
@@ -606,8 +647,120 @@ func (b *metadataBackend) withResolvedParent(info protocol.NodeInfo, relPath str
 
 func (b *metadataBackend) prefetchRoot() error {
 	b.stats.rootPrefetches.Add(1)
-	_, err := b.refreshDirSnapshot(b.RootNodeID())
-	return err
+	entries, err := b.refreshDirSnapshot(b.RootNodeID())
+	if err != nil {
+		return err
+	}
+	jobs := []prefetchJob{{priority: prefetchPriorityNormal, kind: prefetchJobDirSnapshot, nodeID: b.RootNodeID(), relPath: ""}}
+	for _, entry := range entries {
+		if b.profile.IsHotDir(entry.Name) && entry.FileType == protocol.FileTypeDirectory {
+			b.stats.hotDirPrefetches.Add(1)
+			jobs = append(jobs, prefetchJob{priority: prefetchPriorityHigh, kind: prefetchJobDirSnapshot, nodeID: entry.NodeID, relPath: entry.Name})
+		}
+		if b.profile.IsSmallFileCandidate(entry.Name, protocol.NodeInfo{FileType: entry.FileType, Size: entry.Size, Name: entry.Name}) {
+			b.stats.hotFilePrefetches.Add(1)
+			jobs = append(jobs, prefetchJob{priority: prefetchPriorityHigh, kind: prefetchJobSmallFile, nodeID: entry.NodeID, relPath: entry.Name})
+		}
+	}
+	b.runPrefetchJobs(jobs)
+	return nil
+}
+
+func (b *metadataBackend) maybeWarmNode(relPath string, info protocol.NodeInfo) {
+	jobs := make([]prefetchJob, 0, 2)
+	if info.FileType == protocol.FileTypeDirectory && b.profile.IsHotDir(info.Name) {
+		b.stats.hotDirPrefetches.Add(1)
+		jobs = append(jobs, prefetchJob{priority: prefetchPriorityHigh, kind: prefetchJobDirSnapshot, nodeID: info.NodeID, relPath: relPath})
+	}
+	if b.profile.IsSmallFileCandidate(relPath, info) {
+		b.stats.hotFilePrefetches.Add(1)
+		jobs = append(jobs, prefetchJob{priority: prefetchPriorityHigh, kind: prefetchJobSmallFile, nodeID: info.NodeID, relPath: relPath})
+	}
+	b.runPrefetchJobs(jobs)
+}
+
+func (b *metadataBackend) maybeWarmDir(nodeID uint64) {
+	rec, err := b.nodeByID(nodeID)
+	if err != nil {
+		return
+	}
+	base := filepath.Base(rec.relPath)
+	if rec.relPath == "" {
+		base = ""
+	}
+	if base == "" || b.profile.IsHotDir(base) {
+		b.runPrefetchJobs([]prefetchJob{{priority: prefetchPriorityNormal, kind: prefetchJobDirSnapshot, nodeID: nodeID, relPath: rec.relPath}})
+	}
+}
+
+func (b *metadataBackend) runPrefetchJobs(jobs []prefetchJob) {
+	if len(jobs) == 0 {
+		return
+	}
+	for _, priority := range []prefetchPriority{prefetchPriorityHigh, prefetchPriorityNormal} {
+		for _, job := range jobs {
+			if job.priority != priority {
+				continue
+			}
+			if priority == prefetchPriorityHigh {
+				b.stats.highPriorityPrefetches.Add(1)
+			} else {
+				b.stats.normalPriorityPrefetches.Add(1)
+			}
+			switch job.kind {
+			case prefetchJobDirSnapshot:
+				_, _ = b.refreshDirSnapshot(job.nodeID)
+			case prefetchJobSmallFile:
+				_, _, _ = b.loadSmallFileCache(job.relPath)
+			}
+		}
+	}
+}
+
+func (b *metadataBackend) loadSmallFileCache(relPath string) ([]byte, bool, error) {
+	if data, ok := b.cachedSmallFileData(relPath); ok {
+		return data, true, nil
+	}
+	info, ok := b.cachedNodeInfo(relPath)
+	if !ok {
+		parentPath := filepath.Dir(relPath)
+		if parentPath == "." {
+			parentPath = ""
+		}
+		parentID := b.ensureNode(parentPath, 1)
+		var err error
+		info, err = b.refreshNodeInfo(relPath, parentID)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if !b.profile.IsSmallFileCandidate(relPath, info) {
+		return nil, false, nil
+	}
+	data, err := os.ReadFile(b.absPath(relPath))
+	if err != nil {
+		return nil, false, err
+	}
+	b.mu.Lock()
+	b.smallFileCache[relPath] = smallFileCacheEntry{data: append([]byte(nil), data...), expiresAt: b.now().Add(b.cacheTTL)}
+	b.mu.Unlock()
+	b.stats.smallFilePrefetches.Add(1)
+	return append([]byte(nil), data...), true, nil
+}
+
+func (b *metadataBackend) cachedSmallFileData(relPath string) ([]byte, bool) {
+	b.mu.RLock()
+	entry, ok := b.smallFileCache[relPath]
+	b.mu.RUnlock()
+	if !ok || !b.isFresh(entry.expiresAt) {
+		if ok {
+			b.mu.Lock()
+			delete(b.smallFileCache, relPath)
+			b.mu.Unlock()
+		}
+		return nil, false
+	}
+	return append([]byte(nil), entry.data...), true
 }
 
 func (b *metadataBackend) ensureNode(relPath string, parentHint uint64) uint64 {
@@ -656,6 +809,8 @@ func (b *metadataBackend) movePathMapping(srcRel, dstRel string, dstParentID uin
 	delete(b.attrCache, dstRel)
 	delete(b.negativeCache, srcRel)
 	delete(b.negativeCache, dstRel)
+	delete(b.smallFileCache, srcRel)
+	delete(b.smallFileCache, dstRel)
 }
 
 func (b *metadataBackend) removePathMapping(relPath string) {
@@ -667,6 +822,7 @@ func (b *metadataBackend) removePathMapping(relPath string) {
 	}
 	delete(b.attrCache, relPath)
 	delete(b.negativeCache, relPath)
+	delete(b.smallFileCache, relPath)
 }
 
 func (b *metadataBackend) invalidatePath(relPath string, parentID uint64) {
@@ -674,6 +830,7 @@ func (b *metadataBackend) invalidatePath(relPath string, parentID uint64) {
 	b.mu.Lock()
 	delete(b.attrCache, relPath)
 	delete(b.negativeCache, relPath)
+	delete(b.smallFileCache, relPath)
 	if parentID != 0 {
 		delete(b.dirSnapshots, parentID)
 	}

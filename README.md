@@ -12,6 +12,7 @@ This repository currently contains:
 - a TCP placeholder transport that can later be replaced by QUIC
 - a minimal client/server demo and tests
 - Iter 6 recovery/resume baseline
+- Iter 7 editor-focused optimizations: workspace profile, hot-dir/file prefetch, small-file cache, priority-aware prefetch
 
 ## Current scope
 

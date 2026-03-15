@@ -23,6 +23,8 @@ type Server struct {
 	Journal          *journalBroker
 	JournalRetention int
 	Now              func() time.Time
+	StartedAt        time.Time
+	Audit            *AuditLogger
 }
 
 type connectionState struct {
@@ -41,6 +43,7 @@ func New(addr string) *Server {
 		SessionManager:   NewSessionManager(),
 		JournalRetention: 256,
 		Now:              time.Now,
+		StartedAt:        time.Now(),
 	}
 }
 
@@ -65,6 +68,7 @@ func (s *Server) Serve(ln net.Listener) error {
 		s.Journal = newJournalBroker(s.Backend, s.Now, s.JournalRetention)
 	}
 	log.Printf("devmount server listening on %s root=%s", ln.Addr(), s.Backend.rootPath)
+	_ = s.audit("server", "listen", "success", 0, 0, "", map[string]any{"addr": ln.Addr().String(), "root": s.Backend.rootPath})
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
@@ -555,6 +559,13 @@ func (s *Server) requireActiveSession(conn net.Conn, header protocol.Header) boo
 		return false
 	}
 	return true
+}
+
+func (s *Server) audit(category, action, outcome string, requestID, sessionID uint64, path string, details map[string]any) error {
+	if s == nil || s.Audit == nil {
+		return nil
+	}
+	return s.Audit.Log(AuditRecord{Category: category, Action: action, Outcome: outcome, RequestID: requestID, SessionID: sessionID, Path: path, Details: details})
 }
 
 func (s *Server) writeResponse(conn net.Conn, reqHeader protocol.Header, opcode protocol.Opcode, sessionID uint64, payload any) {

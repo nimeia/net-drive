@@ -15,15 +15,25 @@ Windows Apps (VS Code / Git / Terminal)
         |
    Protocol Client
         |
-   TCP placeholder transport (Iter 1)
+   TCP placeholder transport (current implementation)
         |
    Server Runtime
         |
-   Local filesystem backend (Iter 1)
+   Local filesystem backend
 ```
+
+## Current status
+
+The repository currently includes:
+- protocol client/server bring-up
+- metadata and data read/write baseline
+- pull-based watcher/journal baseline
+- recovery and reconnect baseline
+- editor-focused cache/prefetch optimizations
+- productization helpers: config, status endpoints, audit log, build/package scripts
 
 ## Engineering choices
 
-- Use Go for current protocol/server/client bring-up to maximize iteration speed and testability in the sandbox.
-- Keep wire contracts explicit and transport-agnostic so a later QUIC transport can replace the Iter 1 TCP placeholder.
-- Defer WinFsp integration until the control-plane and protocol contracts are stable.
+- Go is used for the current protocol/server/client bring-up to maximize iteration speed and testability.
+- Wire contracts remain transport-agnostic so a later QUIC transport can replace the TCP placeholder.
+- WinFsp integration remains deferred until control-plane, filesystem semantics, and recovery contracts are stable.

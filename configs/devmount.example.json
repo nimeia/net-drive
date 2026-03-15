@@ -1,0 +1,1 @@
+{ "addr": "127.0.0.1:17890", "root_path": ".", "auth_token": "devmount-dev-token", "journal_retention": 256, "status_addr": "127.0.0.1:17891", "audit_log_path": "./devmount-audit.jsonl" }

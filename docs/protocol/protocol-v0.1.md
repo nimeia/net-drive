@@ -4,16 +4,18 @@
 
 Protocol v0.1 is the bring-up contract for a Windows-first, editor-optimized remote filesystem.
 
-Current implemented areas:
-- control channel: hello / auth / create-session / heartbeat
+Currently implemented areas:
+- control channel: hello / auth / create-session / resume-session / heartbeat
 - metadata channel: lookup / getattr / opendir / readdir / rename
 - data channel: open / create / read / write / flush / truncate / set-delete-on-close / close
+- events channel: subscribe / poll-events / ack-events / resync-snapshot
+- recovery channel: recover-handles / revalidate / resubscribe
 
 Still deferred:
-- watcher event stream
-- recovery replay
+- push-style watcher event streaming
 - lease / oplock-style cache negotiation
 - full Windows file semantic coverage
+- full handle replay semantics
 
 ## Transport
 
@@ -117,7 +119,41 @@ The header is always 32 bytes.
 | 54 | CloseReq |
 | 55 | CloseResp |
 
+### Events
+
+| Opcode | Name |
+|---:|---|
+| 60 | SubscribeReq |
+| 61 | SubscribeResp |
+| 62 | PollEventsReq |
+| 63 | PollEventsResp |
+| 64 | AckEventsReq |
+| 65 | AckEventsResp |
+| 66 | ResyncReq |
+| 67 | ResyncResp |
+
+### Recovery
+
+| Opcode | Name |
+|---:|---|
+| 70 | RecoverHandlesReq |
+| 71 | RecoverHandlesResp |
+| 72 | RevalidateReq |
+| 73 | RevalidateResp |
+| 74 | ResubscribeReq |
+| 75 | ResubscribeResp |
+
 ## Message Schema Highlights
+
+### ResumeSessionReq
+
+```json
+{
+  "session_id": 1001,
+  "client_instance_id": "client-1",
+  "last_known_server_time": "2026-03-14T12:00:20Z"
+}
+```
 
 ### OpenReq
 
@@ -139,53 +175,61 @@ The header is always 32 bytes.
 }
 ```
 
-### WriteReq
+### SubscribeReq
 
 ```json
 {
-  "handle_id": 2001,
-  "offset": 0,
-  "data": "base64-json-binary"
+  "node_id": 1,
+  "recursive": true
 }
 ```
 
-### FlushReq
+### RecoverHandlesReq
 
 ```json
 {
-  "handle_id": 2001
+  "handles": [
+    {
+      "previous_handle_id": 2001,
+      "node_id": 7,
+      "writable": false,
+      "delete_on_close": false
+    }
+  ]
 }
 ```
 
-### TruncateReq
+### RevalidateReq
 
 ```json
 {
-  "handle_id": 2001,
-  "size": 3
+  "node_ids": [7, 8, 9]
 }
 ```
 
-### RenameReq
+### ResubscribeReq
 
 ```json
 {
-  "src_parent_node_id": 1,
-  "src_name": ".tmp-save",
-  "dst_parent_node_id": 1,
-  "dst_name": "hello.txt",
-  "replace_existing": true
+  "watches": [
+    {
+      "previous_watch_id": 5001,
+      "node_id": 1,
+      "recursive": true,
+      "after_seq": 12
+    }
+  ]
 }
 ```
 
-### SetDeleteOnCloseReq
+## Session Rules
 
-```json
-{
-  "handle_id": 2002,
-  "delete_on_close": true
-}
-```
+1. Client must send `HelloReq` first.
+2. After `HelloResp`, client may send `AuthReq`.
+3. After `AuthResp`, client may send `CreateSessionReq`.
+4. `ResumeSessionReq` is implemented and requires matching `session_id` and `client_instance_id`.
+5. Metadata, data, events, and recovery channels require an active session.
+6. After session creation or resume, the client must keep the session alive with `HeartbeatReq`.
 
 ## Error Codes
 
@@ -203,79 +247,6 @@ The header is always 32 bytes.
 | ERR_IS_DIR | target is a directory |
 | ERR_INVALID_HANDLE | handle is unknown or closed |
 | ERR_ACCESS_DENIED | write/open mode denied |
+| ERR_WATCH_NOT_FOUND | watch id is unknown |
+| ERR_RECOVERY_FAILED | recovery operation could not be completed |
 | ERR_INTERNAL | internal server error |
-
-## Session Rules
-
-1. Client must send `HelloReq` first.
-2. Until Hello succeeds, only Hello is legal.
-3. After Hello succeeds, client may send `AuthReq`.
-4. After Auth succeeds, client may send `CreateSessionReq`.
-5. Metadata and data channels require an active session.
-6. After session creation, client must send `HeartbeatReq` before lease expiry.
-7. ResumeSession is reserved but not implemented in Iter 4.
-
-
-## 9. Iter 5 Additions
-
-Iter 5 extends the protocol with an **events channel** backed by a bounded server journal.
-
-### 9.1 Events opcodes
-
-| Opcode | Name |
-|---:|---|
-| 60 | SubscribeReq |
-| 61 | SubscribeResp |
-| 62 | PollEventsReq |
-| 63 | PollEventsResp |
-| 64 | AckEventsReq |
-| 65 | AckEventsResp |
-| 66 | ResyncReq |
-| 67 | ResyncResp |
-
-### 9.2 Event model
-
-Events are journaled in sequence order and currently exposed through pull-based polling.
-
-Supported event types:
-- `create`
-- `delete`
-- `content_changed`
-- `meta_changed`
-- `rename_from`
-- `rename_to`
-
-### 9.3 Overflow behavior
-
-The journal is retention-bounded. If a watcher polls with an `after_seq` older than the oldest retained event, the server returns:
-- `overflow = true`
-- `needs_resync = true`
-
-The client must then issue `ResyncReq` and rebuild its local snapshot from `ResyncResp`.
-
-
-## 9. Iter 6 Recovery Additions
-
-Iter 6 adds a minimal recovery channel with `ResumeSession`, `RecoverHandles`, `Revalidate`, and `Resubscribe` operations.
-
-
-## Recovery validation notes
-
-Focused Iter 6 recovery tests now cover:
-- session resume success / client mismatch / expiry
-- per-handle recovery success and per-handle failure
-- node revalidation for existing and deleted entries
-- watch resubscribe carrying forward the last acked sequence
-
-
-## 10. Iter 7 Editor-Focused Backend Optimizations
-
-Iter 7 does not add new wire messages.
-
-The optimization work is currently backend-local and includes:
-- workspace profile inference from common development repositories
-- root-level hot dir / hot file prefetch
-- small-file cache for editor-relevant files
-- priority-aware prefetch scheduling (high before normal)
-
-This keeps the protocol stable while improving the latency of existing `Lookup / GetAttr / OpenDir / Read / Close` paths.

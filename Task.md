@@ -19,13 +19,15 @@
 - [ ] 补充 ResumeSession 占位处理
 - [ ] 输出迭代总结与下一阶段接口空壳
 
-## Iter 2 — 只读挂载 MVP（计划）
+## Iter 2 — 只读挂载 MVP
 
-- [ ] Lookup / GetAttr
-- [ ] OpenDir / ReadDir
-- [ ] Open / Read / Close
+- [x] Lookup / GetAttr
+- [x] OpenDir / ReadDir
+- [x] Open / Read / Close
+- [x] 服务端本地目录只读后端基线
+- [x] 只读工作区浏览合同测试
 - [ ] metadata cache 基线
-- [ ] 只读工作区浏览合同测试
+- [ ] request dispatcher / error mapper 再收口
 
 ## Iter 3 — metadata cache 与目录快照（计划）
 

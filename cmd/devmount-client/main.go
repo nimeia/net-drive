@@ -42,4 +42,23 @@ func main() {
 		log.Fatal(err)
 	}
 	fmt.Printf("heartbeat: state=%s expires=%s\n", hbResp.State, hbResp.ExpiresAt)
+
+	rootAttr, err := c.GetAttr(c.RootNodeID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("root: node=%d type=%s\n", rootAttr.Entry.NodeID, rootAttr.Entry.FileType)
+
+	dirResp, err := c.OpenDir(c.RootNodeID)
+	if err != nil {
+		log.Fatal(err)
+	}
+	listResp, err := c.ReadDir(dirResp.DirCursorID, 0, 16)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("root entries (%d):\n", len(listResp.Entries))
+	for _, entry := range listResp.Entries {
+		fmt.Printf("- %s [%s]\n", entry.Name, entry.FileType)
+	}
 }

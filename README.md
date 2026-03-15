@@ -5,23 +5,28 @@ Developer Mount is a Windows-first, editor-optimized remote filesystem project.
 This repository currently contains:
 - protocol and architecture documents for Iter 0
 - a control-plane baseline for Iter 1
+- an Iter 2 read-only metadata and file access baseline
 - a TCP placeholder transport that can later be replaced by QUIC
-- a minimal client/server demo and tests
+- minimal client/server demos and tests
 
 ## Current scope
 
-The current code implements only the control channel baseline:
+The current code implements:
 - hello / capability negotiation
 - auth
 - create session
 - heartbeat
+- lookup
+- getattr
+- opendir / readdir
+- read-only open / read / close
 
 It does not yet implement:
 - WinFsp integration
-- metadata operations
-- file read/write operations
+- write / flush / rename / replace
 - watcher streaming
 - recovery replay
+- writeback cache
 
 ## Repository layout
 
@@ -56,10 +61,10 @@ go test ./...
 
 ## Demo
 
-Start the server:
+Start the server and expose a local directory:
 
 ```bash
-go run ./cmd/devmount-server
+go run ./cmd/devmount-server -root /path/to/workspace
 ```
 
 In another terminal, run the demo client:

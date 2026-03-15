@@ -60,3 +60,16 @@ func (m *SessionManager) Heartbeat(id uint64, now time.Time) (Session, bool, boo
 	m.sessions[id] = s
 	return s, true, true
 }
+
+func (m *SessionManager) ValidateActive(id uint64, now time.Time) (Session, bool, bool) {
+	m.mu.RLock()
+	s, ok := m.sessions[id]
+	m.mu.RUnlock()
+	if !ok {
+		return Session{}, false, false
+	}
+	if now.After(s.ExpiresAt) || s.State != "active" {
+		return s, true, false
+	}
+	return s, true, true
+}

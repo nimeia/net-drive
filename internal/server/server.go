@@ -111,6 +111,11 @@ func (s *Server) dispatch(conn net.Conn, state *connectionState, header protocol
 			return
 		}
 		s.dispatchEvents(conn, header, payload)
+	case protocol.ChannelRecovery:
+		if !s.requireActiveSession(conn, header) {
+			return
+		}
+		s.dispatchRecovery(conn, header, payload)
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, "channel not implemented", false, nil)
 	}
@@ -184,7 +189,29 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		resp := protocol.CreateSessionResp{SessionID: session.ID, LeaseSeconds: session.LeaseSeconds, ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
 		s.writeResponse(conn, header, protocol.OpcodeCreateSessionResp, session.ID, resp)
 	case protocol.OpcodeResumeSessionReq:
-		s.writeError(conn, header, protocol.ErrUnsupportedOp, "resume session is reserved but not implemented", false, map[string]any{"operation": "ResumeSession"})
+		req, err := transport.DecodePayload[protocol.ResumeSessionReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid resume-session payload", false, nil)
+			return
+		}
+		now := s.Now()
+		session, found, active, matched := s.SessionManager.Resume(req.SessionID, req.ClientInstanceID, now)
+		if !found {
+			s.writeError(conn, header, protocol.ErrSessionNotFound, "session not found", false, nil)
+			return
+		}
+		if !matched {
+			s.writeError(conn, header, protocol.ErrAccessDenied, "client instance mismatch", false, map[string]any{"operation": "ResumeSession"})
+			return
+		}
+		if !active {
+			s.writeError(conn, header, protocol.ErrSessionExpired, "session expired", false, nil)
+			return
+		}
+		state.authenticated = true
+		state.principalID = session.PrincipalID
+		resp := protocol.ResumeSessionResp{SessionID: session.ID, LeaseSeconds: session.LeaseSeconds, ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
+		s.writeResponse(conn, header, protocol.OpcodeResumeSessionResp, session.ID, resp)
 	case protocol.OpcodeHeartbeatReq:
 		req, err := transport.DecodePayload[protocol.HeartbeatReq](payload)
 		if err != nil {
@@ -462,6 +489,57 @@ func (s *Server) dispatchEvents(conn net.Conn, header protocol.Header, payload [
 		s.writeResponse(conn, header, protocol.OpcodeResyncResp, header.SessionID, resp)
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported events opcode %d", header.Opcode), false, nil)
+	}
+}
+
+func (s *Server) dispatchRecovery(conn net.Conn, header protocol.Header, payload []byte) {
+	switch header.Opcode {
+	case protocol.OpcodeRecoverHandlesReq:
+		req, err := transport.DecodePayload[protocol.RecoverHandlesReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid recover handles payload", false, nil)
+			return
+		}
+		results := make([]protocol.RecoverHandleResult, 0, len(req.Handles))
+		for _, spec := range req.Handles {
+			handleID, size, err := s.Backend.RecoverFileHandle(spec.NodeID, spec.Writable, spec.DeleteOnClose)
+			result := protocol.RecoverHandleResult{PreviousHandleID: spec.PreviousHandleID, NodeID: spec.NodeID, HandleID: handleID, Size: size, DeleteOnClose: spec.DeleteOnClose}
+			if err != nil {
+				result.Error = err.Error()
+			}
+			results = append(results, result)
+		}
+		s.writeResponse(conn, header, protocol.OpcodeRecoverHandlesResp, header.SessionID, protocol.RecoverHandlesResp{Handles: results})
+	case protocol.OpcodeRevalidateReq:
+		req, err := transport.DecodePayload[protocol.RevalidateReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid revalidate payload", false, nil)
+			return
+		}
+		entries := make([]protocol.RevalidateEntry, 0, len(req.NodeIDs))
+		for _, nodeID := range req.NodeIDs {
+			entry, err := s.Backend.RevalidateNode(nodeID)
+			if err != nil {
+				entries = append(entries, protocol.RevalidateEntry{NodeID: nodeID, Exists: false, Error: err.Error()})
+				continue
+			}
+			entries = append(entries, entry)
+		}
+		s.writeResponse(conn, header, protocol.OpcodeRevalidateResp, header.SessionID, protocol.RevalidateResp{Entries: entries})
+	case protocol.OpcodeResubscribeReq:
+		req, err := transport.DecodePayload[protocol.ResubscribeReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid resubscribe payload", false, nil)
+			return
+		}
+		results, err := s.Journal.Resubscribe(req.Watches)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrRecoveryFailed, err.Error(), false, nil)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeResubscribeResp, header.SessionID, protocol.ResubscribeResp{Watches: results})
+	default:
+		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported recovery opcode %d", header.Opcode), false, nil)
 	}
 }
 

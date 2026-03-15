@@ -70,6 +70,18 @@ func (c *Client) CreateSession(clientInstanceID string, leaseSeconds uint32) (pr
 	return resp, nil
 }
 
+func (c *Client) ResumeSession(sessionID uint64, clientInstanceID string) (protocol.ResumeSessionResp, error) {
+	prev := c.SessionID
+	c.SessionID = sessionID
+	var resp protocol.ResumeSessionResp
+	if err := c.request(protocol.ChannelControl, protocol.OpcodeResumeSessionReq, protocol.ResumeSessionReq{SessionID: sessionID, ClientInstanceID: clientInstanceID, LastKnownServerTime: protocol.NowRFC3339(time.Now())}, &resp); err != nil {
+		c.SessionID = prev
+		return protocol.ResumeSessionResp{}, err
+	}
+	c.SessionID = resp.SessionID
+	return resp, nil
+}
+
 func (c *Client) Heartbeat() (protocol.HeartbeatResp, error) {
 	var resp protocol.HeartbeatResp
 	if err := c.request(protocol.ChannelControl, protocol.OpcodeHeartbeatReq, protocol.HeartbeatReq{SessionID: c.SessionID, ClientTime: protocol.NowRFC3339(time.Now())}, &resp); err != nil {
@@ -221,6 +233,30 @@ func (c *Client) Resync(watchID uint64) (protocol.ResyncResp, error) {
 	return resp, nil
 }
 
+func (c *Client) RecoverHandles(handles []protocol.RecoverHandleSpec) (protocol.RecoverHandlesResp, error) {
+	var resp protocol.RecoverHandlesResp
+	if err := c.request(protocol.ChannelRecovery, protocol.OpcodeRecoverHandlesReq, protocol.RecoverHandlesReq{Handles: handles}, &resp); err != nil {
+		return protocol.RecoverHandlesResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) RevalidateNodes(nodeIDs []uint64) (protocol.RevalidateResp, error) {
+	var resp protocol.RevalidateResp
+	if err := c.request(protocol.ChannelRecovery, protocol.OpcodeRevalidateReq, protocol.RevalidateReq{NodeIDs: nodeIDs}, &resp); err != nil {
+		return protocol.RevalidateResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) ResubscribeWatches(watches []protocol.ResubscribeSpec) (protocol.ResubscribeResp, error) {
+	var resp protocol.ResubscribeResp
+	if err := c.request(protocol.ChannelRecovery, protocol.OpcodeResubscribeReq, protocol.ResubscribeReq{Watches: watches}, &resp); err != nil {
+		return protocol.ResubscribeResp{}, err
+	}
+	return resp, nil
+}
+
 func (c *Client) request(channel protocol.Channel, opcode protocol.Opcode, reqPayload any, respPayload any) error {
 	if c.Conn == nil {
 		return fmt.Errorf("client is not connected")
@@ -269,6 +305,13 @@ func decodeInto(payload []byte, out any) error {
 		return nil
 	case *protocol.CreateSessionResp:
 		resp, err := transport.DecodePayload[protocol.CreateSessionResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.ResumeSessionResp:
+		resp, err := transport.DecodePayload[protocol.ResumeSessionResp](payload)
 		if err != nil {
 			return err
 		}
@@ -395,6 +438,27 @@ func decodeInto(payload []byte, out any) error {
 		return nil
 	case *protocol.ResyncResp:
 		resp, err := transport.DecodePayload[protocol.ResyncResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.RecoverHandlesResp:
+		resp, err := transport.DecodePayload[protocol.RecoverHandlesResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.RevalidateResp:
+		resp, err := transport.DecodePayload[protocol.RevalidateResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.ResubscribeResp:
+		resp, err := transport.DecodePayload[protocol.ResubscribeResp](payload)
 		if err != nil {
 			return err
 		}

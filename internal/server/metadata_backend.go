@@ -789,3 +789,36 @@ func (b *metadataBackend) SnapshotSubtree(nodeID uint64, recursive bool) ([]prot
 	sort.Slice(entries, func(i, j int) bool { return entries[i].RelativePath < entries[j].RelativePath })
 	return entries, nil
 }
+
+func (b *metadataBackend) RecoverFileHandle(nodeID uint64, writable, deleteOnClose bool) (uint64, int64, error) {
+	handleID, size, err := b.OpenFile(nodeID, writable, false)
+	if err != nil {
+		return 0, 0, err
+	}
+	if deleteOnClose {
+		if err := b.SetDeleteOnClose(handleID, true); err != nil {
+			_ = b.CloseHandle(handleID)
+			return 0, 0, err
+		}
+	}
+	return handleID, size, nil
+}
+
+func (b *metadataBackend) RevalidateNode(nodeID uint64) (protocol.RevalidateEntry, error) {
+	rec, err := b.nodeByID(nodeID)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return protocol.RevalidateEntry{NodeID: nodeID, Exists: false}, nil
+		}
+		return protocol.RevalidateEntry{}, err
+	}
+	entry, err := b.nodeInfoForPath(rec.relPath, rec.parentID)
+	if err != nil {
+		if os.IsNotExist(err) {
+			b.removePathMapping(rec.relPath)
+			return protocol.RevalidateEntry{NodeID: nodeID, Exists: false}, nil
+		}
+		return protocol.RevalidateEntry{}, err
+	}
+	return protocol.RevalidateEntry{NodeID: nodeID, Exists: true, Entry: entry}, nil
+}

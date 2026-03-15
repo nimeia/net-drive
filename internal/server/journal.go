@@ -199,3 +199,32 @@ func cleanEventPath(path string) string {
 	}
 	return strings.Trim(path, "/")
 }
+
+func (j *journalBroker) Resubscribe(specs []protocol.ResubscribeSpec) ([]protocol.ResubscribeResult, error) {
+	results := make([]protocol.ResubscribeResult, 0, len(specs))
+	for _, spec := range specs {
+		startSeq := spec.AfterSeq
+		j.mu.RLock()
+		oldWatch, ok := j.watches[spec.PreviousWatchID]
+		j.mu.RUnlock()
+		if ok {
+			if spec.NodeID == 0 {
+				spec.NodeID = oldWatch.NodeID
+			}
+			if startSeq < oldWatch.AckedSeq {
+				startSeq = oldWatch.AckedSeq
+			}
+		}
+		relPath, err := j.backend.RelPathByNodeID(spec.NodeID)
+		if err != nil {
+			results = append(results, protocol.ResubscribeResult{PreviousWatchID: spec.PreviousWatchID, Error: err.Error()})
+			continue
+		}
+		watchID := j.nextWatchID.Add(1)
+		j.mu.Lock()
+		j.watches[watchID] = &watchSubscription{ID: watchID, NodeID: spec.NodeID, RelPath: relPath, Recursive: spec.Recursive, AckedSeq: startSeq}
+		j.mu.Unlock()
+		results = append(results, protocol.ResubscribeResult{PreviousWatchID: spec.PreviousWatchID, WatchID: watchID, StartSeq: startSeq, AckedSeq: startSeq})
+	}
+	return results, nil
+}

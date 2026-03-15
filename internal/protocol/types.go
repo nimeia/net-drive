@@ -69,6 +69,13 @@ const (
 	OpcodeAckEventsResp  Opcode = 65
 	OpcodeResyncReq      Opcode = 66
 	OpcodeResyncResp     Opcode = 67
+
+	OpcodeRecoverHandlesReq  Opcode = 70
+	OpcodeRecoverHandlesResp Opcode = 71
+	OpcodeRevalidateReq      Opcode = 72
+	OpcodeRevalidateResp     Opcode = 73
+	OpcodeResubscribeReq     Opcode = 74
+	OpcodeResubscribeResp    Opcode = 75
 )
 
 const (
@@ -392,6 +399,68 @@ type ResyncResp struct {
 	Entries     []SnapshotEntry `json:"entries"`
 }
 
+type RecoverHandleSpec struct {
+	PreviousHandleID uint64 `json:"previous_handle_id,omitempty"`
+	NodeID           uint64 `json:"node_id"`
+	Writable         bool   `json:"writable"`
+	DeleteOnClose    bool   `json:"delete_on_close,omitempty"`
+}
+
+type RecoverHandlesReq struct {
+	Handles []RecoverHandleSpec `json:"handles"`
+}
+
+type RecoverHandleResult struct {
+	PreviousHandleID uint64 `json:"previous_handle_id,omitempty"`
+	HandleID         uint64 `json:"handle_id,omitempty"`
+	NodeID           uint64 `json:"node_id"`
+	Size             int64  `json:"size,omitempty"`
+	DeleteOnClose    bool   `json:"delete_on_close,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+type RecoverHandlesResp struct {
+	Handles []RecoverHandleResult `json:"handles"`
+}
+
+type RevalidateReq struct {
+	NodeIDs []uint64 `json:"node_ids"`
+}
+
+type RevalidateEntry struct {
+	NodeID uint64   `json:"node_id"`
+	Exists bool     `json:"exists"`
+	Entry  NodeInfo `json:"entry,omitempty"`
+	Error  string   `json:"error,omitempty"`
+}
+
+type RevalidateResp struct {
+	Entries []RevalidateEntry `json:"entries"`
+}
+
+type ResubscribeSpec struct {
+	PreviousWatchID uint64 `json:"previous_watch_id,omitempty"`
+	NodeID          uint64 `json:"node_id"`
+	Recursive       bool   `json:"recursive"`
+	AfterSeq        uint64 `json:"after_seq,omitempty"`
+}
+
+type ResubscribeResult struct {
+	PreviousWatchID uint64 `json:"previous_watch_id,omitempty"`
+	WatchID         uint64 `json:"watch_id,omitempty"`
+	StartSeq        uint64 `json:"start_seq"`
+	AckedSeq        uint64 `json:"acked_seq,omitempty"`
+	Error           string `json:"error,omitempty"`
+}
+
+type ResubscribeReq struct {
+	Watches []ResubscribeSpec `json:"watches"`
+}
+
+type ResubscribeResp struct {
+	Watches []ResubscribeResult `json:"watches"`
+}
+
 type ErrorCode string
 
 const (
@@ -409,6 +478,7 @@ const (
 	ErrInvalidHandle      ErrorCode = "ERR_INVALID_HANDLE"
 	ErrAccessDenied       ErrorCode = "ERR_ACCESS_DENIED"
 	ErrWatchNotFound      ErrorCode = "ERR_WATCH_NOT_FOUND"
+	ErrRecoveryFailed     ErrorCode = "ERR_RECOVERY_FAILED"
 	ErrInternal           ErrorCode = "ERR_INTERNAL"
 )
 
@@ -422,12 +492,13 @@ type ErrorResp struct {
 func DefaultCapabilities() CapabilitySet {
 	return CapabilitySet{
 		Transport: []string{"tcp-json"},
-		Channels:  []string{"control", "metadata", "data", "events"},
+		Channels:  []string{"control", "metadata", "data", "events", "recovery"},
 		Features: []string{
-			"auth-basic", "session-create", "heartbeat",
+			"auth-basic", "session-create", "resume-session", "heartbeat",
 			"lookup", "getattr", "readdir", "read-open",
 			"create", "write", "flush", "truncate", "rename", "delete-on-close",
 			"watcher-journal", "subscribe", "poll-events", "ack-events", "resync-snapshot",
+			"recover-handles", "revalidate-cache", "resubscribe-watch",
 		},
 	}
 }

@@ -11,6 +11,7 @@ This repository currently contains:
 - watcher and journal polling baseline from Iter 5
 - a TCP placeholder transport that can later be replaced by QUIC
 - a minimal client/server demo and tests
+- Iter 6 recovery/resume baseline
 
 ## Current scope
 
@@ -79,3 +80,7 @@ In another terminal, run the demo client:
 ```bash
 go run ./cmd/devmount-client
 ```
+
+## Iter 6 recovery test matrix
+
+See `docs/architecture/test-report-iter6-recovery-matrix.md` for the focused recovery validation results.

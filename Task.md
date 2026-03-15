@@ -48,12 +48,12 @@
 - [ ] overflow / repair
 - [ ] 工作区目录修复
 
-## Iter 6 — 恢复与重连（计划）
+## Iter 6 — 恢复与重连
 
-- [ ] ResumeSession
-- [ ] RecoverHandles
-- [ ] cache revalidate
-- [ ] watch resubscribe
+- [x] ResumeSession
+- [x] RecoverHandles
+- [x] cache revalidate
+- [x] watch resubscribe
 
 ## Iter 7 — 编辑器专项优化（计划）
 
@@ -68,3 +68,7 @@
 - [ ] 状态页面
 - [ ] 日志导出
 - [ ] 指标面板
+
+## Iter 6 补充收口
+
+- [x] 恢复测试矩阵补齐（session resume / recover handles / revalidate / resubscribe）

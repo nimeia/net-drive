@@ -252,3 +252,17 @@ The journal is retention-bounded. If a watcher polls with an `after_seq` older t
 - `needs_resync = true`
 
 The client must then issue `ResyncReq` and rebuild its local snapshot from `ResyncResp`.
+
+
+## 9. Iter 6 Recovery Additions
+
+Iter 6 adds a minimal recovery channel with `ResumeSession`, `RecoverHandles`, `Revalidate`, and `Resubscribe` operations.
+
+
+## Recovery validation notes
+
+Focused Iter 6 recovery tests now cover:
+- session resume success / client mismatch / expiry
+- per-handle recovery success and per-handle failure
+- node revalidation for existing and deleted entries
+- watch resubscribe carrying forward the last acked sequence

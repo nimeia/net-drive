@@ -73,3 +73,24 @@ func (m *SessionManager) ValidateActive(id uint64, now time.Time) (Session, bool
 	}
 	return s, true, true
 }
+
+func (m *SessionManager) Resume(id uint64, clientInstanceID string, now time.Time) (Session, bool, bool, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.sessions[id]
+	if !ok {
+		return Session{}, false, false, false
+	}
+	if s.ClientInstanceID != clientInstanceID {
+		return s, true, false, false
+	}
+	if now.After(s.ExpiresAt) || s.State != "active" {
+		s.State = "expired"
+		m.sessions[id] = s
+		return s, true, false, true
+	}
+	s.ExpiresAt = now.Add(time.Duration(s.LeaseSeconds) * time.Second)
+	s.State = "active"
+	m.sessions[id] = s
+	return s, true, true, true
+}

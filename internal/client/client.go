@@ -41,14 +41,13 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) Hello() (protocol.HelloResp, error) {
-	req := protocol.HelloReq{
+	var resp protocol.HelloResp
+	if err := c.request(protocol.ChannelControl, protocol.OpcodeHelloReq, protocol.HelloReq{
 		ClientName:                "devmount-client",
-		ClientVersion:             "0.4.0",
+		ClientVersion:             "0.5.0",
 		SupportedProtocolVersions: []uint8{protocol.Version},
 		Capabilities:              protocol.DefaultCapabilities(),
-	}
-	var resp protocol.HelloResp
-	if err := c.request(protocol.ChannelControl, protocol.OpcodeHelloReq, req, &resp); err != nil {
+	}, &resp); err != nil {
 		return protocol.HelloResp{}, err
 	}
 	return resp, nil
@@ -122,7 +121,6 @@ func (c *Client) Rename(srcParentNodeID uint64, srcName string, dstParentNodeID 
 func (c *Client) OpenRead(nodeID uint64) (protocol.OpenResp, error) {
 	return c.open(nodeID, false, false)
 }
-
 func (c *Client) OpenWrite(nodeID uint64, truncate bool) (protocol.OpenResp, error) {
 	return c.open(nodeID, true, truncate)
 }
@@ -187,6 +185,38 @@ func (c *Client) CloseHandle(handleID uint64) (protocol.CloseResp, error) {
 	var resp protocol.CloseResp
 	if err := c.request(protocol.ChannelData, protocol.OpcodeCloseReq, protocol.CloseReq{HandleID: handleID}, &resp); err != nil {
 		return protocol.CloseResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Subscribe(nodeID uint64, recursive bool) (protocol.SubscribeResp, error) {
+	var resp protocol.SubscribeResp
+	if err := c.request(protocol.ChannelEvents, protocol.OpcodeSubscribeReq, protocol.SubscribeReq{NodeID: nodeID, Recursive: recursive}, &resp); err != nil {
+		return protocol.SubscribeResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) PollEvents(watchID, afterSeq uint64, maxEvents uint32) (protocol.PollEventsResp, error) {
+	var resp protocol.PollEventsResp
+	if err := c.request(protocol.ChannelEvents, protocol.OpcodePollEventsReq, protocol.PollEventsReq{WatchID: watchID, AfterSeq: afterSeq, MaxEvents: maxEvents}, &resp); err != nil {
+		return protocol.PollEventsResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) AckEvents(watchID, eventSeq uint64) (protocol.AckEventsResp, error) {
+	var resp protocol.AckEventsResp
+	if err := c.request(protocol.ChannelEvents, protocol.OpcodeAckEventsReq, protocol.AckEventsReq{WatchID: watchID, EventSeq: eventSeq}, &resp); err != nil {
+		return protocol.AckEventsResp{}, err
+	}
+	return resp, nil
+}
+
+func (c *Client) Resync(watchID uint64) (protocol.ResyncResp, error) {
+	var resp protocol.ResyncResp
+	if err := c.request(protocol.ChannelEvents, protocol.OpcodeResyncReq, protocol.ResyncReq{WatchID: watchID}, &resp); err != nil {
+		return protocol.ResyncResp{}, err
 	}
 	return resp, nil
 }
@@ -337,6 +367,34 @@ func decodeInto(payload []byte, out any) error {
 		return nil
 	case *protocol.CloseResp:
 		resp, err := transport.DecodePayload[protocol.CloseResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.SubscribeResp:
+		resp, err := transport.DecodePayload[protocol.SubscribeResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.PollEventsResp:
+		resp, err := transport.DecodePayload[protocol.PollEventsResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.AckEventsResp:
+		resp, err := transport.DecodePayload[protocol.AckEventsResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
+	case *protocol.ResyncResp:
+		resp, err := transport.DecodePayload[protocol.ResyncResp](payload)
 		if err != nil {
 			return err
 		}

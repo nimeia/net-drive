@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"developer-mount/internal/protocol"
@@ -14,12 +15,14 @@ import (
 )
 
 type Server struct {
-	Addr           string
-	RootPath       string
-	AuthToken      string
-	SessionManager *SessionManager
-	Backend        *metadataBackend
-	Now            func() time.Time
+	Addr             string
+	RootPath         string
+	AuthToken        string
+	SessionManager   *SessionManager
+	Backend          *metadataBackend
+	Journal          *journalBroker
+	JournalRetention int
+	Now              func() time.Time
 }
 
 type connectionState struct {
@@ -32,11 +35,12 @@ type connectionState struct {
 
 func New(addr string) *Server {
 	return &Server{
-		Addr:           addr,
-		RootPath:       ".",
-		AuthToken:      "devmount-dev-token",
-		SessionManager: NewSessionManager(),
-		Now:            time.Now,
+		Addr:             addr,
+		RootPath:         ".",
+		AuthToken:        "devmount-dev-token",
+		SessionManager:   NewSessionManager(),
+		JournalRetention: 256,
+		Now:              time.Now,
 	}
 }
 
@@ -57,6 +61,9 @@ func (s *Server) Serve(ln net.Listener) error {
 		}
 		s.Backend = backend
 	}
+	if s.Journal == nil {
+		s.Journal = newJournalBroker(s.Backend, s.Now, s.JournalRetention)
+	}
 	log.Printf("devmount server listening on %s root=%s", ln.Addr(), s.Backend.rootPath)
 	for {
 		conn, err := ln.Accept()
@@ -72,7 +79,7 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
-	state := connectionState{serverName: "devmount-server", serverVersion: "0.4.0"}
+	state := connectionState{serverName: "devmount-server", serverVersion: "0.5.0"}
 	for {
 		header, payload, err := transport.DecodeFrame(conn)
 		if err != nil {
@@ -99,6 +106,11 @@ func (s *Server) dispatch(conn net.Conn, state *connectionState, header protocol
 			return
 		}
 		s.dispatchData(conn, header, payload)
+	case protocol.ChannelEvents:
+		if !s.requireActiveSession(conn, header) {
+			return
+		}
+		s.dispatchEvents(conn, header, payload)
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, "channel not implemented", false, nil)
 	}
@@ -252,11 +264,25 @@ func (s *Server) dispatchMetadata(conn net.Conn, header protocol.Header, payload
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid rename payload", false, nil)
 			return
 		}
+		srcParentRec, err := s.Backend.nodeByID(req.SrcParentNodeID)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		dstParentRec, err := s.Backend.nodeByID(req.DstParentNodeID)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		srcRel := filepath.ToSlash(stringsJoin(srcParentRec.relPath, req.SrcName))
+		dstRel := filepath.ToSlash(stringsJoin(dstParentRec.relPath, req.DstName))
 		entry, err := s.Backend.RenamePath(req.SrcParentNodeID, req.SrcName, req.DstParentNodeID, req.DstName, req.ReplaceExisting)
 		if err != nil {
 			s.writeBackendError(conn, header, err)
 			return
 		}
+		s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventRenameFrom, NodeID: entry.NodeID, ParentNodeID: req.SrcParentNodeID, OldParentNodeID: req.SrcParentNodeID, Name: req.SrcName, OldName: req.SrcName, Path: srcRel, OldPath: srcRel})
+		s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventRenameTo, NodeID: entry.NodeID, ParentNodeID: req.DstParentNodeID, OldParentNodeID: req.SrcParentNodeID, Name: req.DstName, OldName: req.SrcName, Path: dstRel, OldPath: srcRel})
 		s.writeResponse(conn, header, protocol.OpcodeRenameResp, header.SessionID, protocol.RenameResp{Entry: entry})
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported metadata opcode %d", header.Opcode), false, nil)
@@ -288,6 +314,8 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			s.writeBackendError(conn, header, err)
 			return
 		}
+		relPath, _ := s.Backend.RelPathByNodeID(entry.NodeID)
+		s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventCreate, NodeID: entry.NodeID, ParentNodeID: entry.ParentNodeID, Name: entry.Name, Path: relPath})
 		s.writeResponse(conn, header, protocol.OpcodeCreateResp, header.SessionID, protocol.CreateResp{Entry: entry, HandleID: handleID})
 	case protocol.OpcodeReadReq:
 		req, err := transport.DecodePayload[protocol.ReadReq](payload)
@@ -319,10 +347,16 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid flush payload", false, nil)
 			return
 		}
+		snapshot, err := s.Backend.HandleSnapshot(req.HandleID)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
 		if err := s.Backend.FlushHandle(req.HandleID); err != nil {
 			s.writeBackendError(conn, header, err)
 			return
 		}
+		s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventContentChanged, NodeID: snapshot.NodeID, ParentNodeID: snapshot.ParentNodeID, Name: snapshot.Name, Path: filepath.ToSlash(snapshot.RelPath)})
 		s.writeResponse(conn, header, protocol.OpcodeFlushResp, header.SessionID, protocol.FlushResp{Flushed: true})
 	case protocol.OpcodeTruncateReq:
 		req, err := transport.DecodePayload[protocol.TruncateReq](payload)
@@ -330,11 +364,17 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid truncate payload", false, nil)
 			return
 		}
+		snapshot, err := s.Backend.HandleSnapshot(req.HandleID)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
 		size, err := s.Backend.TruncateHandle(req.HandleID, req.Size)
 		if err != nil {
 			s.writeBackendError(conn, header, err)
 			return
 		}
+		s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventContentChanged, NodeID: snapshot.NodeID, ParentNodeID: snapshot.ParentNodeID, Name: snapshot.Name, Path: filepath.ToSlash(snapshot.RelPath)})
 		s.writeResponse(conn, header, protocol.OpcodeTruncateResp, header.SessionID, protocol.TruncateResp{Size: size})
 	case protocol.OpcodeSetDeleteOnCloseReq:
 		req, err := transport.DecodePayload[protocol.SetDeleteOnCloseReq](payload)
@@ -353,13 +393,75 @@ func (s *Server) dispatchData(conn net.Conn, header protocol.Header, payload []b
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid close payload", false, nil)
 			return
 		}
+		snapshot, snapErr := s.Backend.HandleSnapshot(req.HandleID)
 		if err := s.Backend.CloseHandle(req.HandleID); err != nil {
 			s.writeBackendError(conn, header, err)
 			return
 		}
+		if snapErr == nil && snapshot.DeleteOnClose {
+			s.Journal.Append(protocol.WatchEvent{EventType: protocol.EventDelete, NodeID: snapshot.NodeID, ParentNodeID: snapshot.ParentNodeID, Name: snapshot.Name, Path: filepath.ToSlash(snapshot.RelPath)})
+		}
 		s.writeResponse(conn, header, protocol.OpcodeCloseResp, header.SessionID, protocol.CloseResp{Closed: true})
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported data opcode %d", header.Opcode), false, nil)
+	}
+}
+
+func (s *Server) dispatchEvents(conn net.Conn, header protocol.Header, payload []byte) {
+	switch header.Opcode {
+	case protocol.OpcodeSubscribeReq:
+		req, err := transport.DecodePayload[protocol.SubscribeReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid subscribe payload", false, nil)
+			return
+		}
+		watchID, startSeq, err := s.Journal.Subscribe(req.NodeID, req.Recursive)
+		if err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeSubscribeResp, header.SessionID, protocol.SubscribeResp{WatchID: watchID, StartSeq: startSeq})
+	case protocol.OpcodePollEventsReq:
+		req, err := transport.DecodePayload[protocol.PollEventsReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid poll events payload", false, nil)
+			return
+		}
+		resp, err := s.Journal.Poll(req.WatchID, req.AfterSeq, req.MaxEvents)
+		if err != nil {
+			s.writeWatchError(conn, header, err)
+			return
+		}
+		for i := range resp.Events {
+			resp.Events[i].WatchID = req.WatchID
+		}
+		s.writeResponse(conn, header, protocol.OpcodePollEventsResp, header.SessionID, resp)
+	case protocol.OpcodeAckEventsReq:
+		req, err := transport.DecodePayload[protocol.AckEventsReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid ack events payload", false, nil)
+			return
+		}
+		acked, err := s.Journal.Ack(req.WatchID, req.EventSeq)
+		if err != nil {
+			s.writeWatchError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeAckEventsResp, header.SessionID, protocol.AckEventsResp{WatchID: req.WatchID, AckedSeq: acked})
+	case protocol.OpcodeResyncReq:
+		req, err := transport.DecodePayload[protocol.ResyncReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid resync payload", false, nil)
+			return
+		}
+		resp, err := s.Journal.Resync(req.WatchID)
+		if err != nil {
+			s.writeWatchError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeResyncResp, header.SessionID, resp)
+	default:
+		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported events opcode %d", header.Opcode), false, nil)
 	}
 }
 
@@ -414,4 +516,19 @@ func (s *Server) writeBackendError(conn net.Conn, reqHeader protocol.Header, err
 	default:
 		s.writeError(conn, reqHeader, protocol.ErrInternal, err.Error(), false, nil)
 	}
+}
+
+func (s *Server) writeWatchError(conn net.Conn, reqHeader protocol.Header, err error) {
+	if err != nil && err.Error() == "watch not found" {
+		s.writeError(conn, reqHeader, protocol.ErrWatchNotFound, "watch not found", false, nil)
+		return
+	}
+	s.writeBackendError(conn, reqHeader, err)
+}
+
+func stringsJoin(parentRel, name string) string {
+	if parentRel == "" {
+		return name
+	}
+	return filepath.Join(parentRel, name)
 }

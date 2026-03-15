@@ -60,6 +60,15 @@ const (
 	OpcodeSetDeleteOnCloseResp Opcode = 53
 	OpcodeCloseReq             Opcode = 54
 	OpcodeCloseResp            Opcode = 55
+
+	OpcodeSubscribeReq   Opcode = 60
+	OpcodeSubscribeResp  Opcode = 61
+	OpcodePollEventsReq  Opcode = 62
+	OpcodePollEventsResp Opcode = 63
+	OpcodeAckEventsReq   Opcode = 64
+	OpcodeAckEventsResp  Opcode = 65
+	OpcodeResyncReq      Opcode = 66
+	OpcodeResyncResp     Opcode = 67
 )
 
 const (
@@ -308,6 +317,81 @@ type CloseResp struct {
 	Closed bool `json:"closed"`
 }
 
+type EventType string
+
+const (
+	EventCreate         EventType = "create"
+	EventDelete         EventType = "delete"
+	EventContentChanged EventType = "content_changed"
+	EventMetaChanged    EventType = "meta_changed"
+	EventRenameFrom     EventType = "rename_from"
+	EventRenameTo       EventType = "rename_to"
+)
+
+type SubscribeReq struct {
+	NodeID     uint64 `json:"node_id"`
+	Recursive  bool   `json:"recursive"`
+	BufferHint uint32 `json:"buffer_hint,omitempty"`
+}
+
+type SubscribeResp struct {
+	WatchID  uint64 `json:"watch_id"`
+	StartSeq uint64 `json:"start_seq"`
+}
+
+type WatchEvent struct {
+	EventSeq        uint64    `json:"event_seq"`
+	EventTime       string    `json:"event_time"`
+	WatchID         uint64    `json:"watch_id,omitempty"`
+	EventType       EventType `json:"event_type"`
+	NodeID          uint64    `json:"node_id"`
+	ParentNodeID    uint64    `json:"parent_node_id"`
+	OldParentNodeID uint64    `json:"old_parent_node_id,omitempty"`
+	Name            string    `json:"name,omitempty"`
+	OldName         string    `json:"old_name,omitempty"`
+	Path            string    `json:"path,omitempty"`
+	OldPath         string    `json:"old_path,omitempty"`
+}
+
+type PollEventsReq struct {
+	WatchID   uint64 `json:"watch_id"`
+	AfterSeq  uint64 `json:"after_seq"`
+	MaxEvents uint32 `json:"max_events"`
+}
+
+type PollEventsResp struct {
+	Events      []WatchEvent `json:"events"`
+	LatestSeq   uint64       `json:"latest_seq"`
+	Overflow    bool         `json:"overflow"`
+	NeedsResync bool         `json:"needs_resync"`
+	AckedSeq    uint64       `json:"acked_seq"`
+}
+
+type AckEventsReq struct {
+	WatchID  uint64 `json:"watch_id"`
+	EventSeq uint64 `json:"event_seq"`
+}
+
+type AckEventsResp struct {
+	WatchID  uint64 `json:"watch_id"`
+	AckedSeq uint64 `json:"acked_seq"`
+}
+
+type SnapshotEntry struct {
+	RelativePath string   `json:"relative_path"`
+	Entry        NodeInfo `json:"entry"`
+}
+
+type ResyncReq struct {
+	WatchID uint64 `json:"watch_id"`
+}
+
+type ResyncResp struct {
+	WatchID     uint64          `json:"watch_id"`
+	SnapshotSeq uint64          `json:"snapshot_seq"`
+	Entries     []SnapshotEntry `json:"entries"`
+}
+
 type ErrorCode string
 
 const (
@@ -324,6 +408,7 @@ const (
 	ErrIsDir              ErrorCode = "ERR_IS_DIR"
 	ErrInvalidHandle      ErrorCode = "ERR_INVALID_HANDLE"
 	ErrAccessDenied       ErrorCode = "ERR_ACCESS_DENIED"
+	ErrWatchNotFound      ErrorCode = "ERR_WATCH_NOT_FOUND"
 	ErrInternal           ErrorCode = "ERR_INTERNAL"
 )
 
@@ -337,8 +422,13 @@ type ErrorResp struct {
 func DefaultCapabilities() CapabilitySet {
 	return CapabilitySet{
 		Transport: []string{"tcp-json"},
-		Channels:  []string{"control", "metadata", "data"},
-		Features:  []string{"auth-basic", "session-create", "heartbeat", "lookup", "getattr", "readdir", "read-open", "create", "write", "flush", "truncate", "rename", "delete-on-close"},
+		Channels:  []string{"control", "metadata", "data", "events"},
+		Features: []string{
+			"auth-basic", "session-create", "heartbeat",
+			"lookup", "getattr", "readdir", "read-open",
+			"create", "write", "flush", "truncate", "rename", "delete-on-close",
+			"watcher-journal", "subscribe", "poll-events", "ack-events", "resync-snapshot",
+		},
 	}
 }
 

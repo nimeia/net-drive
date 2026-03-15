@@ -214,3 +214,41 @@ The header is always 32 bytes.
 5. Metadata and data channels require an active session.
 6. After session creation, client must send `HeartbeatReq` before lease expiry.
 7. ResumeSession is reserved but not implemented in Iter 4.
+
+
+## 9. Iter 5 Additions
+
+Iter 5 extends the protocol with an **events channel** backed by a bounded server journal.
+
+### 9.1 Events opcodes
+
+| Opcode | Name |
+|---:|---|
+| 60 | SubscribeReq |
+| 61 | SubscribeResp |
+| 62 | PollEventsReq |
+| 63 | PollEventsResp |
+| 64 | AckEventsReq |
+| 65 | AckEventsResp |
+| 66 | ResyncReq |
+| 67 | ResyncResp |
+
+### 9.2 Event model
+
+Events are journaled in sequence order and currently exposed through pull-based polling.
+
+Supported event types:
+- `create`
+- `delete`
+- `content_changed`
+- `meta_changed`
+- `rename_from`
+- `rename_to`
+
+### 9.3 Overflow behavior
+
+The journal is retention-bounded. If a watcher polls with an `after_seq` older than the oldest retained event, the server returns:
+- `overflow = true`
+- `needs_resync = true`
+
+The client must then issue `ResyncReq` and rebuild its local snapshot from `ResyncResp`.

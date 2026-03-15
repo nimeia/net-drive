@@ -709,3 +709,83 @@ func isNotDir(err error) bool {
 func isDir(err error) bool {
 	return errors.Is(err, errIsDir) || (err != nil && strings.Contains(strings.ToLower(err.Error()), "is a directory"))
 }
+
+type HandleSnapshot struct {
+	NodeID        uint64
+	ParentNodeID  uint64
+	RelPath       string
+	Name          string
+	DeleteOnClose bool
+	Size          int64
+}
+
+func (b *metadataBackend) HandleSnapshot(handleID uint64) (HandleSnapshot, error) {
+	h, err := b.handleByID(handleID)
+	if err != nil {
+		return HandleSnapshot{}, err
+	}
+	return HandleSnapshot{
+		NodeID:        h.nodeID,
+		ParentNodeID:  h.parentID,
+		RelPath:       h.relPath,
+		Name:          filepath.Base(h.relPath),
+		DeleteOnClose: h.deleteOnClose,
+		Size:          h.size,
+	}, nil
+}
+
+func (b *metadataBackend) RelPathByNodeID(nodeID uint64) (string, error) {
+	rec, err := b.nodeByID(nodeID)
+	if err != nil {
+		return "", err
+	}
+	return filepath.ToSlash(rec.relPath), nil
+}
+
+func (b *metadataBackend) SnapshotSubtree(nodeID uint64, recursive bool) ([]protocol.SnapshotEntry, error) {
+	rec, err := b.nodeByID(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	rootInfo, err := b.GetAttr(nodeID)
+	if err != nil {
+		return nil, err
+	}
+	entries := []protocol.SnapshotEntry{{RelativePath: "", Entry: rootInfo}}
+	if rootInfo.FileType != protocol.FileTypeDirectory {
+		return entries, nil
+	}
+	baseAbs := b.absPath(rec.relPath)
+	var walk func(currentRel string) error
+	walk = func(currentRel string) error {
+		currentAbs := b.absPath(currentRel)
+		dirEntries, err := os.ReadDir(currentAbs)
+		if err != nil {
+			return err
+		}
+		for _, dirEntry := range dirEntries {
+			childRel := strings.TrimPrefix(filepath.Join(currentRel, dirEntry.Name()), string(filepath.Separator))
+			childInfo, err := b.nodeInfoForPath(childRel, nodeID)
+			if err != nil {
+				return err
+			}
+			relToRoot, err := filepath.Rel(baseAbs, b.absPath(childRel))
+			if err != nil {
+				return err
+			}
+			relToRoot = filepath.ToSlash(relToRoot)
+			entries = append(entries, protocol.SnapshotEntry{RelativePath: relToRoot, Entry: childInfo})
+			if recursive && dirEntry.IsDir() {
+				if err := walk(childRel); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	if err := walk(rec.relPath); err != nil {
+		return nil, err
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].RelativePath < entries[j].RelativePath })
+	return entries, nil
+}

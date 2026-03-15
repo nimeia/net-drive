@@ -8,6 +8,7 @@ This repository currently contains:
 - read-only metadata and file access from Iter 2
 - metadata cache and directory snapshot logic from Iter 3
 - write/save-path baseline from Iter 4
+- watcher and journal polling baseline from Iter 5
 - a TCP placeholder transport that can later be replaced by QUIC
 - a minimal client/server demo and tests
 
@@ -24,11 +25,13 @@ The current code implements:
 - rename / replace-existing
 - delete-on-close
 - metadata cache / negative cache / dir snapshot cache / root prefetch
+- subscribe / poll events / ack / resync snapshot
+- journal-backed event ordering with bounded retention
 
 It does not yet implement:
 - WinFsp integration
-- watcher streaming
-- recovery replay
+- push-style watcher streaming
+- handle/session recovery replay
 - lease / oplock-style invalidation
 - full Windows file semantic coverage
 

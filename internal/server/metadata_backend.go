@@ -486,7 +486,6 @@ func (b *metadataBackend) nodeInfoForPath(relPath string, parentHint uint64) (pr
 func (b *metadataBackend) snapshotDir(nodeID uint64) ([]protocol.DirEntry, error) {
 	if entries, ok := b.cachedDirSnapshot(nodeID); ok {
 		b.stats.dirSnapshotHits.Add(1)
-		b.maybeWarmDir(nodeID)
 		return entries, nil
 	}
 	b.stats.dirSnapshotMisses.Add(1)
@@ -524,9 +523,9 @@ func (b *metadataBackend) refreshDirSnapshot(nodeID uint64) ([]protocol.DirEntry
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 	b.mu.Lock()
-	b.dirSnapshots[nodeID] = dirSnapshotEntry{entries: append([]protocol.DirEntry(nil), items...), expiresAt: b.now().Add(b.cacheTTL)}
+	b.dirSnapshots[nodeID] = dirSnapshotEntry{entries: items, expiresAt: b.now().Add(b.cacheTTL)}
 	b.mu.Unlock()
-	return append([]protocol.DirEntry(nil), items...), nil
+	return items, nil
 }
 
 func (b *metadataBackend) refreshNodeInfo(relPath string, parentHint uint64) (protocol.NodeInfo, error) {
@@ -597,7 +596,7 @@ func (b *metadataBackend) cachedDirSnapshot(nodeID uint64) ([]protocol.DirEntry,
 		}
 		return nil, false
 	}
-	return append([]protocol.DirEntry(nil), snapshot.entries...), true
+	return snapshot.entries, true
 }
 
 func (b *metadataBackend) isNegativeCached(relPath string) bool {

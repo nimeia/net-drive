@@ -24,9 +24,11 @@ The current code implements:
 - metadata cache / negative cache / dir snapshot cache / root prefetch
 - workspace profile / hot dir-file prefetch / small-file cache / priority-aware prefetch
 - product-facing runtime pieces: JSON config, `/healthz`, `/status`, JSONL audit log, build/package scripts
+- clientcore split for future Windows mount integration: tracked runtime state, handles, watches, and recovery snapshots
+- WinFsp-facing read-only mount core: Windows path normalization, mountcore path/handle orchestration, callback bridge, and Windows-tagged host shell
 
 It does not yet implement:
-- WinFsp integration
+- full WinFsp SDK glue and real mounted Windows-host smoke logs (callback bridge and Windows-tagged host shell now exist)
 - push-style watcher streaming
 - lease / oplock-style invalidation
 - full Windows file semantic coverage
@@ -38,13 +40,19 @@ It does not yet implement:
 cmd/
   devmount-server/
   devmount-client/
+  devmount-winfsp/
 configs/
 docs/
   architecture/
   protocol/
 internal/
-  client/
+  client/      # compatibility wrapper for the demo CLI
+  clientcore/  # protocol-facing runtime core for future WinFsp mount work
+  mountcore/  # platform-neutral mount runtime for WinFsp-facing flows
+  platform/windows/  # Windows-specific path helpers and later semantic translators
   protocol/
+  winfsp/
+    adapter/  # thin WinFsp-shaped adapter over mountcore
   server/
   transport/
 scripts/
@@ -70,7 +78,7 @@ go test ./...
 核心稳态专项：
 
 ```bash
-go test ./tests/integration -run 'TestControlPlaneNegative|TestSessionGatingAndProtocolErrorMapping|TestRecovery|TestMultiClientConcurrentCreateWriteRenameAndWatch|TestHeartbeatInterleavesWithFileOperations|TestConnectionJitterRepeatedResumeAndRead|TestServerAndClientBinarySmoke'
+go test ./tests/integration -run 'TestControlPlaneNegative|TestSessionGatingAndProtocolErrorMapping|TestRecovery|TestMultiClientConcurrentCreateWriteRenameAndWatch|TestHeartbeatInterleavesWithFileOperations|TestConnectionJitterRepeatedResumeAndRead|TestRealisticMixedBrowseSaveWatchPressure|TestServerAndClientBinarySmoke'
 go test ./internal/server -run 'TestMetadataBackend|TestJournal|TestLoadServerConfig|TestSnapshotStatus|TestAuditLogger'
 go test ./internal/client
 go test ./internal/transport -run 'TestEncodeDecodeFrameRoundTrip|TestDecodeFrameNegativePaths'
@@ -82,6 +90,28 @@ go test ./internal/benchgate
 ```bash
 go test ./internal/server ./internal/transport -bench . -run '^$'
 ./scripts/benchmark_gate.sh
+```
+
+WinFsp read-only smoke:
+
+```bash
+go run ./cmd/devmount-winfsp -op volume
+go run ./cmd/devmount-winfsp -op getattr -path /
+go run ./cmd/devmount-winfsp -op readdir -path /
+go run ./cmd/devmount-winfsp -op read -path /README.md -length 64
+```
+
+Windows-only host shell compile check:
+
+```bash
+GOOS=windows GOARCH=amd64 go build ./internal/winfsp
+GOOS=windows GOARCH=amd64 go build ./cmd/devmount-winfsp
+```
+
+真实场景混合压力：
+
+```bash
+go test ./tests/integration -run TestRealisticMixedBrowseSaveWatchPressure -count=1 -v
 ```
 
 ## Productized startup
@@ -119,3 +149,8 @@ go run ./cmd/devmount-client
 - Iter 9 core hardening report: `docs/architecture/test-report-iter9-core-hardening.md`
 - Iter 10 second-round coverage report: `docs/architecture/test-report-iter10-second-round-coverage.md`
 - Iter 11 concurrency / transport-negative / smoke / benchmark-gate report: `docs/architecture/test-report-iter11-concurrency-gate.md`
+- Iter 12 ReadDir fast-path optimization and realistic pressure report: `docs/architecture/test-report-iter12-readir-pressure.md`
+
+- Iter 13 Windows client core / WinFsp integration plan: `docs/architecture/windows-client-core-and-winfsp.md`
+- Iter 14 WinFsp read-only MVP boundary: `docs/architecture/windows-winfsp-readonly-mvp.md`
+- Iter 15 WinFsp callback host / build tags: `docs/architecture/windows-winfsp-callback-host.md`

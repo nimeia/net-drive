@@ -84,3 +84,33 @@
 - [x] cmd/devmount-server / cmd/devmount-client smoke test
 - [x] benchmark 阈值与回归门禁（thresholds + gate parser + gate script）
 - [x] 第三轮测试报告与运行建议
+
+## Iter 12 — ReadDir 快路径优化 / 真实场景压力测试
+- [x] 修复 ReadDirSnapshotHit 命中路径的多余 refresh 与切片复制
+- [x] 回归 benchmark gate，确认 ReadDirSnapshotHit 恢复到 0 allocs/op
+- [x] 增加更接近真实编辑器行为的 mixed browse/save/watch/resume 压力测试
+- [x] 输出本轮压力测试与性能结论
+
+## Iter 13 — Windows client core refactor / WinFsp 接入设计
+- [x] 拆分 internal/clientcore（rpc / session / metadata / data / watch / recovery / state）
+- [x] 增加 tracked handles / tracked watches / tracked nodes / recovery snapshot
+- [x] 保持 internal/client 兼容包装层，避免 demo client 与既有测试回归
+- [x] 补 internal/clientcore 状态与恢复单测
+- [x] 输出 WinFsp 接入设计文档（windows-client-core-and-winfsp）
+
+
+## Iter 14 — WinFsp read-only mount MVP
+- [x] 新增 internal/platform/windows 路径规范化辅助
+- [x] 新增 internal/mountcore（path cache / lookup / getattr / opendir / readdir / read / close）
+- [x] 新增 internal/winfsp/adapter 只读操作映射层
+- [x] 新增 cmd/devmount-winfsp smoke CLI，走 mountcore + adapter 链路
+- [x] 增加 mountcore / adapter / Windows path 单测
+- [x] 输出 Iter 14 只读 WinFsp MVP 设计与当前边界文档
+
+## Iter 15 — WinFsp callback host / Windows-only build tags
+- [x] 新增 internal/winfsp NTSTATUS 映射与 callback bridge
+- [x] 新增 Windows-only host shell（host_windows.go / host_other.go）
+- [x] cmd/devmount-winfsp 增加 -op mount 入口
+- [x] 增加 callback mapping 单测
+- [x] 增加 Windows 交叉编译验证
+- [x] 输出 Iter 15 callback host / build-tags 设计文档

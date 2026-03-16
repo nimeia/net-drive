@@ -69,6 +69,12 @@ go build ./...
 ./scripts/build.sh
 ```
 
+On Windows:
+
+```powershell
+./scripts/build.ps1
+```
+
 ## Test
 
 ```bash

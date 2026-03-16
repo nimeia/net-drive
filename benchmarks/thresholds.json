@@ -1,0 +1,9 @@
+{
+  "BenchmarkMetadataLookupHot": { "max_ns_per_op": 50000, "max_allocs_per_op": 6 },
+  "BenchmarkMetadataGetAttrHot": { "max_ns_per_op": 50000, "max_allocs_per_op": 6 },
+  "BenchmarkMetadataReadDirSnapshotHit": { "max_ns_per_op": 100000, "max_allocs_per_op": 8 },
+  "BenchmarkMetadataReadSmallFileCached": { "max_ns_per_op": 25000, "max_allocs_per_op": 6 },
+  "BenchmarkMetadataCreateWriteFlushClose": { "max_ns_per_op": 5000000, "max_allocs_per_op": 32 },
+  "BenchmarkJournalPoll": { "max_ns_per_op": 1000000, "max_allocs_per_op": 32 },
+  "BenchmarkEncodeDecodeFrame": { "max_ns_per_op": 50000, "max_allocs_per_op": 16 }
+}

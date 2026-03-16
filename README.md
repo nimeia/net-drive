@@ -50,6 +50,7 @@ internal/
 scripts/
 tests/
   integration/
+benchmarks/
 Task.md
 ```
 
@@ -64,6 +65,23 @@ go build ./...
 
 ```bash
 go test ./...
+```
+
+核心稳态专项：
+
+```bash
+go test ./tests/integration -run 'TestControlPlaneNegative|TestSessionGatingAndProtocolErrorMapping|TestRecovery|TestMultiClientConcurrentCreateWriteRenameAndWatch|TestHeartbeatInterleavesWithFileOperations|TestConnectionJitterRepeatedResumeAndRead|TestServerAndClientBinarySmoke'
+go test ./internal/server -run 'TestMetadataBackend|TestJournal|TestLoadServerConfig|TestSnapshotStatus|TestAuditLogger'
+go test ./internal/client
+go test ./internal/transport -run 'TestEncodeDecodeFrameRoundTrip|TestDecodeFrameNegativePaths'
+go test ./internal/benchgate
+```
+
+性能基线：
+
+```bash
+go test ./internal/server ./internal/transport -bench . -run '^$'
+./scripts/benchmark_gate.sh
 ```
 
 ## Productized startup
@@ -97,3 +115,7 @@ go run ./cmd/devmount-client
 
 - Iter 6 recovery matrix: `docs/architecture/test-report-iter6-recovery-matrix.md`
 - Productization closure build report: `docs/architecture/test-report-productization.md`
+
+- Iter 9 core hardening report: `docs/architecture/test-report-iter9-core-hardening.md`
+- Iter 10 second-round coverage report: `docs/architecture/test-report-iter10-second-round-coverage.md`
+- Iter 11 concurrency / transport-negative / smoke / benchmark-gate report: `docs/architecture/test-report-iter11-concurrency-gate.md`

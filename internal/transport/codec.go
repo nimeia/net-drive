@@ -45,6 +45,9 @@ func DecodeFrame(r io.Reader) (protocol.Header, []byte, error) {
 	if string(header.Magic[:]) != protocol.Magic {
 		return header, nil, fmt.Errorf("invalid magic %q", string(header.Magic[:]))
 	}
+	if header.Version != protocol.Version {
+		return header, nil, fmt.Errorf("unsupported protocol version %d", header.Version)
+	}
 	if header.HeaderLength != protocol.HeaderLength {
 		return header, nil, fmt.Errorf("invalid header length %d", header.HeaderLength)
 	}

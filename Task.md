@@ -61,3 +61,26 @@
 - [x] JSONL 审计日志基线
 - [x] build/package 脚本
 - [x] 运行文档与示例配置
+
+
+## Iter 9 — 核心稳态与性能基线
+- [x] 控制面负向合同测试（握手顺序 / 版本 / token / unsupported channel）
+- [x] session gating 与 backend error mapping 测试
+- [x] metadata backend 边界矩阵（overwrite / invalid handle / pagination / sparse write / cross-dir rename）
+- [x] journal 单测补强（maxEvents / ack monotonic / watch-not-found / path match / resubscribe）
+- [x] 第一轮 benchmark 基线（transport / metadata hot path / journal poll）
+
+## Iter 10 — 第二轮核心补测
+- [x] internal/client 单测（request header / error path / request-id mismatch / session tracking）
+- [x] config / status / audit 单测
+- [x] recovery 深边界测试（writable recover / delete-on-close / rename 后 revalidate / unknown previous watch resubscribe）
+- [x] 第二轮测试报告与运行建议
+
+
+## Iter 11 — 并发稳定性 / 烟测 / benchmark 门禁
+- [x] 多客户端并发 / 抖动测试（并发 create-write-flush-rename + repeated resume jitter）
+- [x] heartbeat 与文件操作交织测试
+- [x] transport 截断帧 / 坏帧负向测试
+- [x] cmd/devmount-server / cmd/devmount-client smoke test
+- [x] benchmark 阈值与回归门禁（thresholds + gate parser + gate script）
+- [x] 第三轮测试报告与运行建议

@@ -3,6 +3,7 @@ package client
 import (
 	"fmt"
 	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 type Client struct {
 	Addr       string
 	Conn       net.Conn
+	reqMu      sync.Mutex
 	nextReqID  atomic.Uint64
 	SessionID  uint64
 	RootNodeID uint64
@@ -267,6 +269,10 @@ func (c *Client) request(channel protocol.Channel, opcode protocol.Opcode, reqPa
 	if err != nil {
 		return err
 	}
+
+	c.reqMu.Lock()
+	defer c.reqMu.Unlock()
+
 	if _, err := c.Conn.Write(frame); err != nil {
 		return err
 	}

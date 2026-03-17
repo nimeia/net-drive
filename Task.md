@@ -184,3 +184,21 @@
 - [x] WinFsp host run 路径接入 binding 结果，缺少 WinFsp 或 mount-point preflight 失败时直接报错
 - [x] 为 binding 摘要增加跨平台单测
 - [x] 更新 README 与 Iter 22 文档说明
+
+## Iter 23 — 日志 / 自检 / 诊断导出
+- [x] 新增 internal/winclientlog，支持默认日志路径、追加写入与 tail
+- [x] 新增 internal/winclientdiag，支持 WinFsp / 网络 / 配置 / runtime 摘要自检
+- [x] Win32 Diagnostics 页增加 Run Self-Check / Export Diagnostics 入口
+- [x] 托盘菜单增加 Export Diagnostics 入口
+- [x] cmd/devmount-winfsp 增加 `-op selfcheck` / `-op export-diagnostics`
+- [x] 为日志层与诊断层增加跨平台单测
+- [x] 更新 README 与 Iter 23 诊断文档说明
+
+## Iter 24 — 完整 WinFsp SDK dispatcher host 第一版
+- [x] winclient Config / Profiles / CLI 增加 Host Backend（auto / preflight / dispatcher-v1）
+- [x] WinFsp binding probe 增加 dispatcher API 可用性探测
+- [x] mount runtime snapshot / Dashboard / Diagnostics 展示 requested/effective backend 与 dispatcher 状态
+- [x] host run 路径按 effective backend 分流到 preflight / dispatcher-v1 scaffold
+- [x] 为 dispatcher backend 摘要与 Config 增加单测
+- [x] 更新 README 与 Iter 24 dispatcher host 第一版文档说明
+

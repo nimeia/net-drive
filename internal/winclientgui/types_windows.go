@@ -13,8 +13,7 @@ const (
 )
 
 const (
-	cwUseDefault = ^uintptr(0x7fffffff)
-
+	cwUseDefault       = ^uintptr(0x7fffffff)
 	wsOverlapped       = 0x00000000
 	wsCaption          = 0x00C00000
 	wsSysMenu          = 0x00080000
@@ -46,7 +45,6 @@ const (
 	wmClose            = 0x0010
 	wmCommand          = 0x0111
 	wmTimer            = 0x0113
-	wmUser             = 0x0400
 	wmApp              = 0x8000
 	wmSize             = 0x0005
 	wmLButtonDblClk    = 0x0203
@@ -66,7 +64,6 @@ const (
 	timerRefreshID     = 1
 	trayCallbackMsg    = wmApp + 1
 )
-
 const (
 	nimAdd         = 0x00000000
 	nimModify      = 0x00000001
@@ -83,7 +80,6 @@ const (
 	tpmRightButton = 0x0002
 	tpmReturnCmd   = 0x0100
 )
-
 const (
 	idPageSelect = 1001 + iota
 	idHeaderStatus
@@ -104,6 +100,7 @@ const (
 	idVolumePrefix
 	idPath
 	idLocalPath
+	idHostBackend
 	idOffset
 	idLength
 	idMaxEntries
@@ -112,11 +109,12 @@ const (
 	idPreview
 	idDefaults
 	idRefreshDiagnostics
+	idRunSelfCheck
+	idExportDiagnostics
 	idClear
 	idDiagnosticsSummary
 	idOutput
 )
-
 const (
 	idTrayOpen = 5001 + iota
 	idTrayDashboard
@@ -124,6 +122,7 @@ const (
 	idTrayDiagnostics
 	idTrayStartMount
 	idTrayStopMount
+	idTrayExportDiagnostics
 	idTrayExit
 )
 
@@ -131,7 +130,6 @@ type point struct {
 	X int32
 	Y int32
 }
-
 type msg struct {
 	Hwnd     uintptr
 	Message  uint32
@@ -141,7 +139,6 @@ type msg struct {
 	Pt       point
 	LPrivate uint32
 }
-
 type wndClassEx struct {
 	CbSize        uint32
 	Style         uint32
@@ -156,7 +153,6 @@ type wndClassEx struct {
 	LpszClassName *uint16
 	HIconSm       uintptr
 }
-
 type notifyIconData struct {
 	CbSize           uint32
 	HWnd             uintptr

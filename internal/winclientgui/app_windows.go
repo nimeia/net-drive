@@ -3,12 +3,15 @@
 package winclientgui
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"syscall"
 	"unsafe"
 
 	"developer-mount/internal/winclient"
+	"developer-mount/internal/winclientdiag"
+	"developer-mount/internal/winclientlog"
 	"developer-mount/internal/winclientruntime"
 	"developer-mount/internal/winclientstore"
 )
@@ -22,6 +25,7 @@ type app struct {
 	operations      []winclient.Operation
 	store           winclientstore.Store
 	state           winclientstore.State
+	logger          winclientlog.Logger
 	runtime         *winclientruntime.Runtime
 	currentPage     uiPage
 	trayInitialized bool
@@ -36,7 +40,6 @@ var activeApp *app
 func Run() error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
-
 	hInstance, _, err := procGetModuleHandle.Call(0)
 	if hInstance == 0 {
 		return fmt.Errorf("GetModuleHandleW failed: %w", err)
@@ -45,58 +48,29 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-
-	a := &app{
-		hInstance:    hInstance,
-		controls:     map[int]uintptr{},
-		pageControls: map[uiPage][]uintptr{},
-		runner:       winclient.NewRunner(),
-		operations:   winclient.Operations(),
-		store:        store,
-		runtime:      winclientruntime.New(nil),
+	logger, err := winclientlog.OpenDefault()
+	if err != nil {
+		return err
 	}
+	a := &app{hInstance: hInstance, controls: map[int]uintptr{}, pageControls: map[uiPage][]uintptr{}, runner: winclient.NewRunner(), operations: winclient.Operations(), store: store, logger: logger, runtime: winclientruntime.New(nil)}
 	activeApp = a
-
+	_ = a.logInfo("win32 client startup")
 	className := syscall.StringToUTF16Ptr("DeveloperMountWin32ProductWindow")
 	cursor, _, _ := procLoadCursor.Call(0, uintptr(idcArrow))
 	icon, _, _ := procLoadIcon.Call(0, uintptr(idiApplication))
-	wc := wndClassEx{
-		CbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
-		LpfnWndProc:   syscall.NewCallback(windowProc),
-		HInstance:     hInstance,
-		HIcon:         icon,
-		HCursor:       cursor,
-		HbrBackground: uintptr(colorWindow + 1),
-		LpszClassName: className,
-		HIconSm:       icon,
-	}
+	wc := wndClassEx{CbSize: uint32(unsafe.Sizeof(wndClassEx{})), LpfnWndProc: syscall.NewCallback(windowProc), HInstance: hInstance, HIcon: icon, HCursor: cursor, HbrBackground: uintptr(colorWindow + 1), LpszClassName: className, HIconSm: icon}
 	atom, _, regErr := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
 	if atom == 0 {
 		return fmt.Errorf("RegisterClassExW failed: %w", regErr)
 	}
-
 	title := syscall.StringToUTF16Ptr("Developer Mount Windows Client")
-	hwnd, _, createErr := procCreateWindowEx.Call(
-		0,
-		uintptr(unsafe.Pointer(className)),
-		uintptr(unsafe.Pointer(title)),
-		uintptr(wsOverlappedWindow|wsVisible),
-		cwUseDefault,
-		cwUseDefault,
-		1100,
-		920,
-		0,
-		0,
-		hInstance,
-		0,
-	)
+	hwnd, _, createErr := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)), uintptr(wsOverlappedWindow|wsVisible), cwUseDefault, cwUseDefault, 1120, 940, 0, 0, hInstance, 0)
 	if hwnd == 0 {
 		return fmt.Errorf("CreateWindowExW failed: %w", createErr)
 	}
 	a.hwnd = hwnd
 	procShowWindow.Call(hwnd, swShowDefault)
 	procUpdateWindow.Call(hwnd)
-
 	var m msg
 	for {
 		ret, _, msgErr := procGetMessage.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
@@ -123,6 +97,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 				activeApp.resetDefaults()
 				activeApp.setText(idProfileName, "default")
 				activeApp.setOutput("profile store load failed: " + err.Error())
+				_ = activeApp.logError("profile store load failed: " + err.Error())
 			}
 			activeApp.showPage(pageDashboard)
 			activeApp.refreshRuntimeViews()
@@ -157,6 +132,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	case wmDestroy:
 		if activeApp != nil {
 			activeApp.removeTray()
+			_ = activeApp.logInfo("win32 client shutdown")
 		}
 		procKillTimer.Call(hwnd, timerRefreshID)
 		procPostQuitMessage.Call(0)
@@ -164,4 +140,16 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	}
 	ret, _, _ := procDefWindowProc.Call(hwnd, uintptr(msg), wParam, lParam)
 	return ret
+}
+
+func (a *app) logInfo(message string) error  { return a.logger.Info(message) }
+func (a *app) logError(message string) error { return a.logger.Error(message) }
+func (a *app) currentDiagnosticsReport() (winclientdiag.Report, error) {
+	cfg, err := a.readConfigFields()
+	if err != nil {
+		return winclientdiag.Report{}, err
+	}
+	tail, _ := a.logger.Tail(16 * 1024)
+	checker := winclientdiag.NewChecker()
+	return checker.Run(context.Background(), cfg, a.runtime.Snapshot(), a.store.Path(), a.logger.Path(), tail), nil
 }

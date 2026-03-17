@@ -16,6 +16,11 @@ func runHost(ctx context.Context, h *Host) error {
 	if err != nil {
 		return err
 	}
-	<-ctx.Done()
-	return nil
+	switch binding.EffectiveBackend {
+	case "winfsp-dispatcher-v1":
+		return runDispatcherHostV1(ctx, h)
+	default:
+		<-ctx.Done()
+		return nil
+	}
 }

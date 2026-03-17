@@ -15,11 +15,8 @@ import (
 const winfspDiskDeviceName = `\\Device\\WinFsp.Disk`
 
 func probeBinding(config HostConfig) (BindingInfo, error) {
-	info := BindingInfo{
-		Backend:    "winfsp-native-preflight",
-		Available:  false,
-		MountPoint: config.MountPoint,
-	}
+	requested := normalizeRequestedBackend(config.Backend)
+	info := BindingInfo{RequestedBackend: requested, Backend: "winfsp-native-preflight", EffectiveBackend: "winfsp-native-preflight", Available: false, MountPoint: config.MountPoint}
 
 	dllPath, err := findWinFspDLL()
 	if err != nil {
@@ -31,6 +28,13 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 	info.Available = true
 	info.LauncherPath = findWinFspLauncher()
 
+	if dispatcher, dispatcherErr := probeDispatcherBindings(dllPath); dispatcherErr != nil {
+		info.DispatcherStatus = dispatcherErr.Error()
+	} else {
+		_ = dispatcher
+		info.DispatcherReady = true
+		info.DispatcherStatus = "dispatcher APIs ready"
+	}
 	if strings.TrimSpace(config.MountPoint) == "" {
 		info.PreflightError = "mount point is required"
 		return info, fmt.Errorf(info.PreflightError)
@@ -41,6 +45,19 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 	}
 	info.PreflightOK = true
 	info.Note = "WinFsp DLL loaded and FspFileSystemPreflight succeeded for the requested mount point."
+	switch requested {
+	case "dispatcher-v1":
+		if !info.DispatcherReady {
+			return info, fmt.Errorf("dispatcher-v1 requested but dispatcher APIs are unavailable: %s", info.DispatcherStatus)
+		}
+		info.Backend = "winfsp-dispatcher-v1"
+		info.EffectiveBackend = "winfsp-dispatcher-v1"
+	case "preflight", "auto":
+		info.Backend = "winfsp-native-preflight"
+		info.EffectiveBackend = "winfsp-native-preflight"
+	default:
+		return info, fmt.Errorf("unsupported host backend %q", requested)
+	}
 	return info, nil
 }
 
@@ -71,10 +88,7 @@ func candidateDLLPaths() []string {
 	}
 	for _, root := range base {
 		for _, name := range names {
-			candidates = append(candidates,
-				filepath.Join(root, name),
-				filepath.Join(root, "bin", name),
-			)
+			candidates = append(candidates, filepath.Join(root, name), filepath.Join(root, "bin", name))
 		}
 		entries, _ := os.ReadDir(filepath.Join(root, "SxS"))
 		for _, entry := range entries {
@@ -147,7 +161,6 @@ func preflightMount(dllPath, mountPoint string) error {
 		return fmt.Errorf("load %s: %w", dllPath, err)
 	}
 	defer dll.Release()
-
 	proc, err := dll.FindProc("FspFileSystemPreflight")
 	if err != nil {
 		return fmt.Errorf("find FspFileSystemPreflight: %w", err)

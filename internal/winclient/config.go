@@ -17,6 +17,12 @@ const (
 	OperationMaterialize Operation = "materialize"
 )
 
+const (
+	HostBackendAuto         = "auto"
+	HostBackendPreflight    = "preflight"
+	HostBackendDispatcherV1 = "dispatcher-v1"
+)
+
 type Config struct {
 	Addr             string
 	Token            string
@@ -26,29 +32,34 @@ type Config struct {
 	VolumePrefix     string
 	Path             string
 	LocalPath        string
+	HostBackend      string
 	Offset           int64
 	Length           uint32
 	MaxEntries       uint32
 }
 
 func DefaultConfig() Config {
-	return Config{
-		Addr:             "127.0.0.1:17890",
-		Token:            "devmount-dev-token",
-		ClientInstanceID: "win32-test-ui",
-		LeaseSeconds:     30,
-		MountPoint:       "M:",
-		VolumePrefix:     "devmount",
-		Path:             "/",
-		LocalPath:        "devmount-local",
-		Offset:           0,
-		Length:           64,
-		MaxEntries:       32,
-	}
+	return Config{Addr: "127.0.0.1:17890", Token: "devmount-dev-token", ClientInstanceID: "win32-test-ui", LeaseSeconds: 30, MountPoint: "M:", VolumePrefix: "devmount", Path: "/", LocalPath: "devmount-local", HostBackend: HostBackendAuto, Offset: 0, Length: 64, MaxEntries: 32}
 }
 
 func Operations() []Operation {
 	return []Operation{OperationVolume, OperationGetAttr, OperationReadDir, OperationRead, OperationMaterialize}
+}
+func HostBackendOptions() []string {
+	return []string{HostBackendAuto, HostBackendPreflight, HostBackendDispatcherV1}
+}
+func NormalizeHostBackend(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	switch value {
+	case "", HostBackendAuto:
+		return HostBackendAuto
+	case HostBackendPreflight:
+		return HostBackendPreflight
+	case HostBackendDispatcherV1:
+		return HostBackendDispatcherV1
+	default:
+		return value
+	}
 }
 
 func (c Config) Normalized() Config {
@@ -80,6 +91,7 @@ func (c Config) Normalized() Config {
 	if strings.TrimSpace(c.LocalPath) == "" {
 		c.LocalPath = defaults.LocalPath
 	}
+	c.HostBackend = NormalizeHostBackend(c.HostBackend)
 	if c.Length == 0 {
 		c.Length = defaults.Length
 	}
@@ -115,6 +127,9 @@ func (c Config) Validate(op Operation) error {
 	if !strings.HasPrefix(c.Path, "/") {
 		return fmt.Errorf("path must start with '/'")
 	}
+	if c.HostBackend != HostBackendAuto && c.HostBackend != HostBackendPreflight && c.HostBackend != HostBackendDispatcherV1 {
+		return fmt.Errorf("unsupported host backend %q", c.HostBackend)
+	}
 	if op == OperationMaterialize && strings.TrimSpace(c.LocalPath) == "" {
 		return fmt.Errorf("local path is required for materialize")
 	}
@@ -128,30 +143,14 @@ func (c Config) Validate(op Operation) error {
 
 func BuildCLIPreview(config Config, op Operation) string {
 	config = config.Normalized()
-	args := []string{
-		"devmount-winfsp.exe",
-		"-addr", quoteIfNeeded(config.Addr),
-		"-token", quoteIfNeeded(config.Token),
-		"-client-instance", quoteIfNeeded(config.ClientInstanceID),
-		"-op", string(op),
-		"-path", quoteIfNeeded(config.Path),
-		"-mount-point", quoteIfNeeded(config.MountPoint),
-		"-volume-prefix", quoteIfNeeded(config.VolumePrefix),
-	}
+	args := []string{"devmount-winfsp.exe", "-addr", quoteIfNeeded(config.Addr), "-token", quoteIfNeeded(config.Token), "-client-instance", quoteIfNeeded(config.ClientInstanceID), "-op", string(op), "-path", quoteIfNeeded(config.Path), "-mount-point", quoteIfNeeded(config.MountPoint), "-volume-prefix", quoteIfNeeded(config.VolumePrefix), "-host-backend", quoteIfNeeded(config.HostBackend)}
 	switch op {
 	case OperationRead:
-		args = append(args,
-			"-offset", strconv.FormatInt(config.Offset, 10),
-			"-length", strconv.FormatUint(uint64(config.Length), 10),
-		)
+		args = append(args, "-offset", strconv.FormatInt(config.Offset, 10), "-length", strconv.FormatUint(uint64(config.Length), 10))
 	case OperationReadDir:
 		args = append(args, "-max-entries", strconv.FormatUint(uint64(config.MaxEntries), 10))
 	case OperationMaterialize:
-		args = append(args,
-			"-local-path", quoteIfNeeded(config.LocalPath),
-			"-length", strconv.FormatUint(uint64(config.Length), 10),
-			"-max-entries", strconv.FormatUint(uint64(config.MaxEntries), 10),
-		)
+		args = append(args, "-local-path", quoteIfNeeded(config.LocalPath), "-length", strconv.FormatUint(uint64(config.Length), 10), "-max-entries", strconv.FormatUint(uint64(config.MaxEntries), 10))
 	}
 	return strings.Join(args, " ")
 }
@@ -160,9 +159,7 @@ func quoteIfNeeded(s string) string {
 	if s == "" {
 		return `""`
 	}
-	if strings.IndexFunc(s, func(r rune) bool {
-		return r == ' ' || r == '\t' || r == '"'
-	}) == -1 {
+	if strings.IndexFunc(s, func(r rune) bool { return r == ' ' || r == '\t' || r == '"' }) == -1 {
 		return s
 	}
 	escaped := strings.ReplaceAll(s, `"`, `\\"`)

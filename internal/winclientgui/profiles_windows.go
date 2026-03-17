@@ -33,25 +33,27 @@ func (a *app) loadProfiles() error {
 	}
 	return nil
 }
-
 func (a *app) saveProfile() {
 	cfg, err := a.readConfigFields()
 	if err != nil {
 		a.setOutput("configuration error: " + err.Error())
+		_ = a.logError("save profile config error: " + err.Error())
 		return
 	}
 	name := strings.TrimSpace(a.text(idProfileName))
 	state, err := a.store.SaveProfile(name, cfg)
 	if err != nil {
 		a.setOutput("save profile failed: " + err.Error())
+		_ = a.logError("save profile failed: " + err.Error())
 		return
 	}
 	a.state = state
 	a.populateProfileList()
 	a.refreshRuntimeViews()
-	a.setOutput("saved profile \"" + name + "\" to " + a.store.Path())
+	message := "saved profile \"" + name + "\" to " + a.store.Path()
+	a.setOutput(message)
+	_ = a.logInfo(message)
 }
-
 func (a *app) loadSelectedProfile() {
 	name := strings.TrimSpace(a.text(idProfileName))
 	if name == "" {
@@ -70,14 +72,16 @@ func (a *app) loadSelectedProfile() {
 	a.state.ActiveProfile = name
 	if err := a.store.Save(a.state); err != nil {
 		a.setOutput("profile loaded but active-profile save failed: " + err.Error())
+		_ = a.logError("save active profile failed: " + err.Error())
 		return
 	}
 	a.populateProfileList()
 	a.setText(idProfileName, name)
 	a.refreshRuntimeViews()
-	a.setOutput("loaded profile \"" + name + "\"")
+	message := "loaded profile \"" + name + "\""
+	a.setOutput(message)
+	_ = a.logInfo(message)
 }
-
 func (a *app) deleteSelectedProfile() {
 	name := strings.TrimSpace(a.text(idProfileName))
 	if name == "" {
@@ -86,6 +90,7 @@ func (a *app) deleteSelectedProfile() {
 	state, err := a.store.DeleteProfile(name)
 	if err != nil {
 		a.setOutput("delete profile failed: " + err.Error())
+		_ = a.logError("delete profile failed: " + err.Error())
 		return
 	}
 	a.state = state
@@ -98,9 +103,10 @@ func (a *app) deleteSelectedProfile() {
 		a.setText(idProfileName, "default")
 	}
 	a.refreshRuntimeViews()
-	a.setOutput("deleted profile \"" + name + "\"")
+	message := "deleted profile \"" + name + "\""
+	a.setOutput(message)
+	_ = a.logInfo(message)
 }
-
 func (a *app) populateProfileList() {
 	combo := a.controls[idSavedProfiles]
 	procSendMessage.Call(combo, cbResetContent, 0, 0)
@@ -119,12 +125,10 @@ func (a *app) populateProfileList() {
 		procSendMessage.Call(combo, cbSetCurSel, ^uintptr(0), 0)
 	}
 }
-
 func (a *app) resetDefaults() {
 	a.applyConfig(winclient.DefaultConfig())
 	procSendMessage.Call(a.controls[idOperation], cbSetCurSel, 0, 0)
 }
-
 func (a *app) applyConfig(cfg winclient.Config) {
 	cfg = cfg.Normalized()
 	a.setText(idAddr, cfg.Addr)
@@ -135,11 +139,11 @@ func (a *app) applyConfig(cfg winclient.Config) {
 	a.setText(idVolumePrefix, cfg.VolumePrefix)
 	a.setText(idPath, cfg.Path)
 	a.setText(idLocalPath, cfg.LocalPath)
+	a.setComboSelection(idHostBackend, cfg.HostBackend)
 	a.setText(idOffset, strconv.FormatInt(cfg.Offset, 10))
 	a.setText(idLength, strconv.FormatUint(uint64(cfg.Length), 10))
 	a.setText(idMaxEntries, strconv.FormatUint(uint64(cfg.MaxEntries), 10))
 }
-
 func (a *app) readConfig() (winclient.Config, winclient.Operation, error) {
 	cfg, err := a.readConfigFields()
 	if err != nil {
@@ -154,17 +158,8 @@ func (a *app) readConfig() (winclient.Config, winclient.Operation, error) {
 	}
 	return cfg, op, nil
 }
-
 func (a *app) readConfigFields() (winclient.Config, error) {
-	cfg := winclient.Config{
-		Addr:             a.text(idAddr),
-		Token:            a.text(idToken),
-		ClientInstanceID: a.text(idClientInstance),
-		MountPoint:       a.text(idMountPoint),
-		VolumePrefix:     a.text(idVolumePrefix),
-		Path:             a.text(idPath),
-		LocalPath:        a.text(idLocalPath),
-	}
+	cfg := winclient.Config{Addr: a.text(idAddr), Token: a.text(idToken), ClientInstanceID: a.text(idClientInstance), MountPoint: a.text(idMountPoint), VolumePrefix: a.text(idVolumePrefix), Path: a.text(idPath), LocalPath: a.text(idLocalPath), HostBackend: a.selectedHostBackend()}
 	lease, err := parseUint32Field("lease seconds", a.text(idLeaseSeconds))
 	if err != nil {
 		return winclient.Config{}, err
@@ -187,11 +182,17 @@ func (a *app) readConfigFields() (winclient.Config, error) {
 	cfg.MaxEntries = maxEntries
 	return cfg.Normalized(), nil
 }
-
 func (a *app) selectedOperation() (winclient.Operation, error) {
 	index, _, _ := procSendMessage.Call(a.controls[idOperation], cbGetCurSel, 0, 0)
 	if int(index) < 0 || int(index) >= len(a.operations) {
 		return "", fmt.Errorf("select an operation")
 	}
 	return a.operations[int(index)], nil
+}
+func (a *app) selectedHostBackend() string {
+	value := a.selectedComboText(idHostBackend)
+	if value == "" {
+		value = winclient.HostBackendAuto
+	}
+	return winclient.NormalizeHostBackend(value)
 }

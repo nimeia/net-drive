@@ -121,6 +121,7 @@ func (a *app) showTrayMenu() {
 	appendMenu(menu, mfSeparator, 0, "")
 	appendMenu(menu, mfString, idTrayStartMount, "Start Mount")
 	appendMenu(menu, mfString, idTrayStopMount, "Stop Mount")
+	appendMenu(menu, mfString, idTrayExportDiagnostics, "Export Diagnostics")
 	appendMenu(menu, mfSeparator, 0, "")
 	appendMenu(menu, mfString, idTrayExit, "Exit")
 
@@ -153,6 +154,8 @@ func (a *app) handleTrayCommand(id int) {
 		a.startMount()
 	case idTrayStopMount:
 		a.stopMount()
+	case idTrayExportDiagnostics:
+		a.exportDiagnostics()
 	case idTrayExit:
 		a.exitRequested = true
 		procShowWindow.Call(a.hwnd, swShow)

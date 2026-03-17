@@ -8,8 +8,10 @@ import (
 type HostConfig struct {
 	MountPoint   string
 	VolumePrefix string
+	Backend      string
 	DebugLog     bool
 }
+
 type Host struct {
 	config    HostConfig
 	callbacks *Callbacks

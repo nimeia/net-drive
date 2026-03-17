@@ -25,59 +25,60 @@ const (
 )
 
 type Snapshot struct {
-	Phase             Phase
-	StatusText        string
-	LastError         string
-	ActiveProfile     string
-	ServerAddr        string
-	MountPoint        string
-	VolumePrefix      string
-	RemotePath        string
-	ClientInstanceID  string
-	SessionID         uint64
-	PrincipalID       string
-	ServerName        string
-	ServerVersion     string
-	ExpiresAt         string
-	HostBackend       string
-	HostDLLPath       string
-	HostLauncherPath  string
-	HostBindingStatus string
-	StartedAt         time.Time
-	UpdatedAt         time.Time
+	Phase               Phase
+	StatusText          string
+	LastError           string
+	ActiveProfile       string
+	ServerAddr          string
+	MountPoint          string
+	VolumePrefix        string
+	RemotePath          string
+	ClientInstanceID    string
+	SessionID           uint64
+	PrincipalID         string
+	ServerName          string
+	ServerVersion       string
+	ExpiresAt           string
+	RequestedBackend    string
+	HostBackend         string
+	HostDLLPath         string
+	HostLauncherPath    string
+	HostBindingStatus   string
+	HostDispatcherState string
+	StartedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type SessionInfo struct {
-	ServerAddr        string
-	MountPoint        string
-	VolumePrefix      string
-	RemotePath        string
-	ClientInstanceID  string
-	SessionID         uint64
-	PrincipalID       string
-	ServerName        string
-	ServerVersion     string
-	ExpiresAt         string
-	HostBackend       string
-	HostDLLPath       string
-	HostLauncherPath  string
-	HostBindingStatus string
+	ServerAddr          string
+	MountPoint          string
+	VolumePrefix        string
+	RemotePath          string
+	ClientInstanceID    string
+	SessionID           uint64
+	PrincipalID         string
+	ServerName          string
+	ServerVersion       string
+	ExpiresAt           string
+	RequestedBackend    string
+	HostBackend         string
+	HostDLLPath         string
+	HostLauncherPath    string
+	HostBindingStatus   string
+	HostDispatcherState string
 }
 
 type Session interface {
 	Info() SessionInfo
 	Run(ctx context.Context) error
 }
-
 type Builder interface {
 	Build(config winclient.Config) (Session, error)
 }
-
 type Host interface {
 	Config() winfsp.HostConfig
 	Run(ctx context.Context) error
 }
-
 type HostFactory func(config winfsp.HostConfig, adapter *adapterpkg.Adapter) Host
 
 type Runtime struct {
@@ -88,10 +89,7 @@ type Runtime struct {
 	state   Snapshot
 }
 
-func New(builder Builder) *Runtime {
-	return NewWithClock(builder, time.Now)
-}
-
+func New(builder Builder) *Runtime { return NewWithClock(builder, time.Now) }
 func NewWithClock(builder Builder, now func() time.Time) *Runtime {
 	if builder == nil {
 		builder = NewDefaultBuilder(nil)
@@ -100,31 +98,15 @@ func NewWithClock(builder Builder, now func() time.Time) *Runtime {
 		now = time.Now
 	}
 	current := now()
-	return &Runtime{
-		builder: builder,
-		now:     now,
-		state: Snapshot{
-			Phase:      PhaseIdle,
-			StatusText: "Idle — no active mount session",
-			StartedAt:  current,
-			UpdatedAt:  current,
-		},
-	}
+	return &Runtime{builder: builder, now: now, state: Snapshot{Phase: PhaseIdle, StatusText: "Idle — no active mount session", StartedAt: current, UpdatedAt: current}}
 }
-
-func (r *Runtime) Snapshot() Snapshot {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-	return r.state
-}
-
+func (r *Runtime) Snapshot() Snapshot { r.mu.RLock(); defer r.mu.RUnlock(); return r.state }
 func (r *Runtime) Start(config winclient.Config, activeProfile string) error {
 	config = config.Normalized()
 	if err := config.Validate(winclient.OperationMount); err != nil {
 		r.transitionToError(activeProfile, config, err)
 		return err
 	}
-
 	r.mu.Lock()
 	if r.cancel != nil || r.state.Phase == PhaseConnecting || r.state.Phase == PhaseMounted || r.state.Phase == PhaseStopping {
 		current := r.state.Phase
@@ -132,20 +114,8 @@ func (r *Runtime) Start(config winclient.Config, activeProfile string) error {
 		return fmt.Errorf("mount runtime is busy (%s)", current)
 	}
 	now := r.now()
-	r.state = Snapshot{
-		Phase:            PhaseConnecting,
-		StatusText:       fmt.Sprintf("Connecting to %s and preparing mount at %s", config.Addr, config.MountPoint),
-		ActiveProfile:    activeProfile,
-		ServerAddr:       config.Addr,
-		MountPoint:       config.MountPoint,
-		VolumePrefix:     config.VolumePrefix,
-		RemotePath:       config.Path,
-		ClientInstanceID: config.ClientInstanceID,
-		StartedAt:        now,
-		UpdatedAt:        now,
-	}
+	r.state = Snapshot{Phase: PhaseConnecting, StatusText: fmt.Sprintf("Connecting to %s and preparing mount at %s", config.Addr, config.MountPoint), ActiveProfile: activeProfile, ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, RequestedBackend: config.HostBackend, StartedAt: now, UpdatedAt: now}
 	r.mu.Unlock()
-
 	session, err := r.builder.Build(config)
 	if err != nil {
 		r.transitionToError(activeProfile, config, err)
@@ -153,36 +123,13 @@ func (r *Runtime) Start(config winclient.Config, activeProfile string) error {
 	}
 	info := session.Info()
 	ctx, cancel := context.WithCancel(context.Background())
-
 	r.mu.Lock()
 	r.cancel = cancel
-	r.state = Snapshot{
-		Phase:             PhaseMounted,
-		StatusText:        fmt.Sprintf("Mounted %s at %s", info.ServerAddr, info.MountPoint),
-		ActiveProfile:     activeProfile,
-		ServerAddr:        info.ServerAddr,
-		MountPoint:        info.MountPoint,
-		VolumePrefix:      info.VolumePrefix,
-		RemotePath:        info.RemotePath,
-		ClientInstanceID:  info.ClientInstanceID,
-		SessionID:         info.SessionID,
-		PrincipalID:       info.PrincipalID,
-		ServerName:        info.ServerName,
-		ServerVersion:     info.ServerVersion,
-		ExpiresAt:         info.ExpiresAt,
-		HostBackend:       info.HostBackend,
-		HostDLLPath:       info.HostDLLPath,
-		HostLauncherPath:  info.HostLauncherPath,
-		HostBindingStatus: info.HostBindingStatus,
-		StartedAt:         r.state.StartedAt,
-		UpdatedAt:         r.now(),
-	}
+	r.state = Snapshot{Phase: PhaseMounted, StatusText: fmt.Sprintf("Mounted %s at %s", info.ServerAddr, info.MountPoint), ActiveProfile: activeProfile, ServerAddr: info.ServerAddr, MountPoint: info.MountPoint, VolumePrefix: info.VolumePrefix, RemotePath: info.RemotePath, ClientInstanceID: info.ClientInstanceID, SessionID: info.SessionID, PrincipalID: info.PrincipalID, ServerName: info.ServerName, ServerVersion: info.ServerVersion, ExpiresAt: info.ExpiresAt, RequestedBackend: info.RequestedBackend, HostBackend: info.HostBackend, HostDLLPath: info.HostDLLPath, HostLauncherPath: info.HostLauncherPath, HostBindingStatus: info.HostBindingStatus, HostDispatcherState: info.HostDispatcherState, StartedAt: r.state.StartedAt, UpdatedAt: r.now()}
 	r.mu.Unlock()
-
 	go r.waitForSession(ctx, session)
 	return nil
 }
-
 func (r *Runtime) Stop() error {
 	r.mu.Lock()
 	cancel := r.cancel
@@ -197,7 +144,6 @@ func (r *Runtime) Stop() error {
 	cancel()
 	return nil
 }
-
 func (r *Runtime) waitForSession(ctx context.Context, session Session) {
 	err := session.Run(ctx)
 	r.mu.Lock()
@@ -216,32 +162,17 @@ func (r *Runtime) waitForSession(ctx context.Context, session Session) {
 	r.state.LastError = err.Error()
 	r.state.UpdatedAt = updated
 }
-
 func (r *Runtime) transitionToError(activeProfile string, config winclient.Config, err error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := r.now()
-	r.state = Snapshot{
-		Phase:            PhaseError,
-		StatusText:       fmt.Sprintf("Mount runtime failed for %s", config.MountPoint),
-		LastError:        err.Error(),
-		ActiveProfile:    activeProfile,
-		ServerAddr:       config.Addr,
-		MountPoint:       config.MountPoint,
-		VolumePrefix:     config.VolumePrefix,
-		RemotePath:       config.Path,
-		ClientInstanceID: config.ClientInstanceID,
-		StartedAt:        r.state.StartedAt,
-		UpdatedAt:        now,
-	}
+	r.state = Snapshot{Phase: PhaseError, StatusText: fmt.Sprintf("Mount runtime failed for %s", config.MountPoint), LastError: err.Error(), ActiveProfile: activeProfile, ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, RequestedBackend: config.HostBackend, StartedAt: r.state.StartedAt, UpdatedAt: now}
 	if r.state.StartedAt.IsZero() {
 		r.state.StartedAt = now
 	}
 }
 
-type DefaultBuilder struct {
-	newHost HostFactory
-}
+type DefaultBuilder struct{ newHost HostFactory }
 
 func NewDefaultBuilder(factory HostFactory) DefaultBuilder {
 	if factory == nil {
@@ -251,7 +182,6 @@ func NewDefaultBuilder(factory HostFactory) DefaultBuilder {
 	}
 	return DefaultBuilder{newHost: factory}
 }
-
 func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 	config = config.Normalized()
 	cli := clientcore.New(config.Addr)
@@ -264,7 +194,6 @@ func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 			_ = cli.Close()
 		}
 	}()
-
 	helloResp, err := cli.Hello()
 	if err != nil {
 		return nil, err
@@ -280,42 +209,15 @@ func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 	if _, err := cli.Heartbeat(); err != nil {
 		return nil, err
 	}
-
-	mount := mountcore.New(cli, mountcore.Options{
-		RootNodeID: cli.RootNodeID,
-		VolumeName: config.VolumePrefix,
-		ReadOnly:   true,
-	})
+	mount := mountcore.New(cli, mountcore.Options{RootNodeID: cli.RootNodeID, VolumeName: config.VolumePrefix, ReadOnly: true})
 	adapter := adapterpkg.New(mount)
-	host := b.newHost(winfsp.HostConfig{
-		MountPoint:   config.MountPoint,
-		VolumePrefix: config.VolumePrefix,
-	}, adapter)
+	host := b.newHost(winfsp.HostConfig{MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, Backend: config.HostBackend}, adapter)
 	binding, err := winfsp.Probe(host.Config())
 	if err != nil {
 		return nil, err
 	}
 	cleanup = false
-	return defaultSession{
-		client: cli,
-		host:   host,
-		info: SessionInfo{
-			ServerAddr:        config.Addr,
-			MountPoint:        config.MountPoint,
-			VolumePrefix:      config.VolumePrefix,
-			RemotePath:        config.Path,
-			ClientInstanceID:  config.ClientInstanceID,
-			SessionID:         sessionResp.SessionID,
-			PrincipalID:       authResp.PrincipalID,
-			ServerName:        helloResp.ServerName,
-			ServerVersion:     helloResp.ServerVersion,
-			ExpiresAt:         sessionResp.ExpiresAt,
-			HostBackend:       binding.Backend,
-			HostDLLPath:       binding.DLLPath,
-			HostLauncherPath:  binding.LauncherPath,
-			HostBindingStatus: binding.Summary(),
-		},
-	}, nil
+	return defaultSession{client: cli, host: host, info: SessionInfo{ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, SessionID: sessionResp.SessionID, PrincipalID: authResp.PrincipalID, ServerName: helloResp.ServerName, ServerVersion: helloResp.ServerVersion, ExpiresAt: sessionResp.ExpiresAt, RequestedBackend: binding.RequestedBackend, HostBackend: binding.EffectiveBackend, HostDLLPath: binding.DLLPath, HostLauncherPath: binding.LauncherPath, HostBindingStatus: binding.Summary(), HostDispatcherState: binding.DispatcherStatus}}, nil
 }
 
 type defaultSession struct {
@@ -324,10 +226,7 @@ type defaultSession struct {
 	info   SessionInfo
 }
 
-func (s defaultSession) Info() SessionInfo {
-	return s.info
-}
-
+func (s defaultSession) Info() SessionInfo { return s.info }
 func (s defaultSession) Run(ctx context.Context) error {
 	defer s.client.Close()
 	return s.host.Run(ctx)

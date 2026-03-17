@@ -3,14 +3,18 @@ package winfsp
 import "fmt"
 
 type BindingInfo struct {
-	Backend        string
-	Available      bool
-	DLLPath        string
-	LauncherPath   string
-	MountPoint     string
-	PreflightOK    bool
-	PreflightError string
-	Note           string
+	RequestedBackend string
+	Backend          string
+	EffectiveBackend string
+	Available        bool
+	DLLPath          string
+	LauncherPath     string
+	MountPoint       string
+	PreflightOK      bool
+	PreflightError   string
+	DispatcherReady  bool
+	DispatcherStatus string
+	Note             string
 }
 
 func (b BindingInfo) Summary() string {
@@ -24,12 +28,17 @@ func (b BindingInfo) Summary() string {
 	if b.PreflightError != "" {
 		status = fmt.Sprintf("error: %s", b.PreflightError)
 	}
-	if b.Backend == "" {
+	backend := b.EffectiveBackend
+	if backend == "" {
+		backend = b.Backend
+	}
+	if backend == "" {
 		return status
 	}
-	return fmt.Sprintf("%s (%s)", b.Backend, status)
+	if b.DispatcherStatus != "" {
+		return fmt.Sprintf("%s (%s; %s)", backend, status, b.DispatcherStatus)
+	}
+	return fmt.Sprintf("%s (%s)", backend, status)
 }
 
-func Probe(config HostConfig) (BindingInfo, error) {
-	return probeBinding(config)
-}
+func Probe(config HostConfig) (BindingInfo, error) { return probeBinding(config) }

@@ -28,7 +28,7 @@ The current code implements:
 - WinFsp-facing read-only mount core: Windows path normalization, mountcore path/handle orchestration, callback bridge, and Windows-tagged host shell
 
 It does not yet implement:
-- full WinFsp SDK glue and real mounted Windows-host smoke logs (callback bridge and Windows-tagged host shell now exist)
+- full WinFsp SDK dispatcher glue and real Explorer-served Windows-host smoke logs (callback bridge, tray shell, and WinFsp native preflight binding now exist)
 - push-style watcher streaming
 - lease / oplock-style invalidation
 - full Windows file semantic coverage
@@ -118,7 +118,9 @@ Win32 config test UI build:
 go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devmount-client-win32
 ```
 
-The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
+The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. Closing or minimizing the window keeps the client alive in the notification area, where the tray menu can reopen pages and start or stop the mount runtime. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
+
+On Windows, the mount runtime now performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, and calls the native `FspFileSystemPreflight` API for the requested mount point before the runtime enters the active session path.
 
 Windows-only host shell compile check:
 
@@ -180,3 +182,5 @@ go run ./cmd/devmount-client
 - Iter 18 Win32 client profile persistence baseline: `docs/architecture/windows-client-profile-persistence.md`
 - Iter 19 Windows client shell pages: `docs/architecture/windows-client-shell-pages.md`
 - Iter 20 Windows client mount runtime state machine: `docs/architecture/windows-client-mount-runtime.md`
+- Iter 21 Windows client tray / background runtime: `docs/architecture/windows-client-tray-runtime.md`
+- Iter 22 WinFsp binding preflight in mount runtime: `docs/architecture/windows-winfsp-binding-runtime.md`

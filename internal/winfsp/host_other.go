@@ -8,7 +8,7 @@ import (
 )
 
 func runHost(ctx context.Context, h *Host) error {
-	_ = ctx
-	_ = h
-	return fmt.Errorf("winfsp host is only available on windows")
+	binding, _ := Probe(h.config)
+	h.binding = binding
+	return fmt.Errorf("winfsp host is only supported on Windows")
 }

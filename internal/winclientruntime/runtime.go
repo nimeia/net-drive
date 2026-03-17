@@ -25,35 +25,43 @@ const (
 )
 
 type Snapshot struct {
-	Phase            Phase
-	StatusText       string
-	LastError        string
-	ActiveProfile    string
-	ServerAddr       string
-	MountPoint       string
-	VolumePrefix     string
-	RemotePath       string
-	ClientInstanceID string
-	SessionID        uint64
-	PrincipalID      string
-	ServerName       string
-	ServerVersion    string
-	ExpiresAt        string
-	StartedAt        time.Time
-	UpdatedAt        time.Time
+	Phase             Phase
+	StatusText        string
+	LastError         string
+	ActiveProfile     string
+	ServerAddr        string
+	MountPoint        string
+	VolumePrefix      string
+	RemotePath        string
+	ClientInstanceID  string
+	SessionID         uint64
+	PrincipalID       string
+	ServerName        string
+	ServerVersion     string
+	ExpiresAt         string
+	HostBackend       string
+	HostDLLPath       string
+	HostLauncherPath  string
+	HostBindingStatus string
+	StartedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 type SessionInfo struct {
-	ServerAddr       string
-	MountPoint       string
-	VolumePrefix     string
-	RemotePath       string
-	ClientInstanceID string
-	SessionID        uint64
-	PrincipalID      string
-	ServerName       string
-	ServerVersion    string
-	ExpiresAt        string
+	ServerAddr        string
+	MountPoint        string
+	VolumePrefix      string
+	RemotePath        string
+	ClientInstanceID  string
+	SessionID         uint64
+	PrincipalID       string
+	ServerName        string
+	ServerVersion     string
+	ExpiresAt         string
+	HostBackend       string
+	HostDLLPath       string
+	HostLauncherPath  string
+	HostBindingStatus string
 }
 
 type Session interface {
@@ -66,6 +74,7 @@ type Builder interface {
 }
 
 type Host interface {
+	Config() winfsp.HostConfig
 	Run(ctx context.Context) error
 }
 
@@ -148,21 +157,25 @@ func (r *Runtime) Start(config winclient.Config, activeProfile string) error {
 	r.mu.Lock()
 	r.cancel = cancel
 	r.state = Snapshot{
-		Phase:            PhaseMounted,
-		StatusText:       fmt.Sprintf("Mounted %s at %s", info.ServerAddr, info.MountPoint),
-		ActiveProfile:    activeProfile,
-		ServerAddr:       info.ServerAddr,
-		MountPoint:       info.MountPoint,
-		VolumePrefix:     info.VolumePrefix,
-		RemotePath:       info.RemotePath,
-		ClientInstanceID: info.ClientInstanceID,
-		SessionID:        info.SessionID,
-		PrincipalID:      info.PrincipalID,
-		ServerName:       info.ServerName,
-		ServerVersion:    info.ServerVersion,
-		ExpiresAt:        info.ExpiresAt,
-		StartedAt:        r.state.StartedAt,
-		UpdatedAt:        r.now(),
+		Phase:             PhaseMounted,
+		StatusText:        fmt.Sprintf("Mounted %s at %s", info.ServerAddr, info.MountPoint),
+		ActiveProfile:     activeProfile,
+		ServerAddr:        info.ServerAddr,
+		MountPoint:        info.MountPoint,
+		VolumePrefix:      info.VolumePrefix,
+		RemotePath:        info.RemotePath,
+		ClientInstanceID:  info.ClientInstanceID,
+		SessionID:         info.SessionID,
+		PrincipalID:       info.PrincipalID,
+		ServerName:        info.ServerName,
+		ServerVersion:     info.ServerVersion,
+		ExpiresAt:         info.ExpiresAt,
+		HostBackend:       info.HostBackend,
+		HostDLLPath:       info.HostDLLPath,
+		HostLauncherPath:  info.HostLauncherPath,
+		HostBindingStatus: info.HostBindingStatus,
+		StartedAt:         r.state.StartedAt,
+		UpdatedAt:         r.now(),
 	}
 	r.mu.Unlock()
 
@@ -278,21 +291,29 @@ func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 		MountPoint:   config.MountPoint,
 		VolumePrefix: config.VolumePrefix,
 	}, adapter)
+	binding, err := winfsp.Probe(host.Config())
+	if err != nil {
+		return nil, err
+	}
 	cleanup = false
 	return defaultSession{
 		client: cli,
 		host:   host,
 		info: SessionInfo{
-			ServerAddr:       config.Addr,
-			MountPoint:       config.MountPoint,
-			VolumePrefix:     config.VolumePrefix,
-			RemotePath:       config.Path,
-			ClientInstanceID: config.ClientInstanceID,
-			SessionID:        sessionResp.SessionID,
-			PrincipalID:      authResp.PrincipalID,
-			ServerName:       helloResp.ServerName,
-			ServerVersion:    helloResp.ServerVersion,
-			ExpiresAt:        sessionResp.ExpiresAt,
+			ServerAddr:        config.Addr,
+			MountPoint:        config.MountPoint,
+			VolumePrefix:      config.VolumePrefix,
+			RemotePath:        config.Path,
+			ClientInstanceID:  config.ClientInstanceID,
+			SessionID:         sessionResp.SessionID,
+			PrincipalID:       authResp.PrincipalID,
+			ServerName:        helloResp.ServerName,
+			ServerVersion:     helloResp.ServerVersion,
+			ExpiresAt:         sessionResp.ExpiresAt,
+			HostBackend:       binding.Backend,
+			HostDLLPath:       binding.DLLPath,
+			HostLauncherPath:  binding.LauncherPath,
+			HostBindingStatus: binding.Summary(),
 		},
 	}, nil
 }

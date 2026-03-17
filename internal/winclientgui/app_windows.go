@@ -14,16 +14,21 @@ import (
 )
 
 type app struct {
-	hInstance    uintptr
-	hwnd         uintptr
-	controls     map[int]uintptr
-	pageControls map[uiPage][]uintptr
-	runner       winclient.Runner
-	operations   []winclient.Operation
-	store        winclientstore.Store
-	state        winclientstore.State
-	runtime      *winclientruntime.Runtime
-	currentPage  uiPage
+	hInstance       uintptr
+	hwnd            uintptr
+	controls        map[int]uintptr
+	pageControls    map[uiPage][]uintptr
+	runner          winclient.Runner
+	operations      []winclient.Operation
+	store           winclientstore.Store
+	state           winclientstore.State
+	runtime         *winclientruntime.Runtime
+	currentPage     uiPage
+	trayInitialized bool
+	exitRequested   bool
+	sentHideTip     bool
+	lastTrayPhase   winclientruntime.Phase
+	lastTrayError   string
 }
 
 var activeApp *app
@@ -54,13 +59,16 @@ func Run() error {
 
 	className := syscall.StringToUTF16Ptr("DeveloperMountWin32ProductWindow")
 	cursor, _, _ := procLoadCursor.Call(0, uintptr(idcArrow))
+	icon, _, _ := procLoadIcon.Call(0, uintptr(idiApplication))
 	wc := wndClassEx{
 		CbSize:        uint32(unsafe.Sizeof(wndClassEx{})),
 		LpfnWndProc:   syscall.NewCallback(windowProc),
 		HInstance:     hInstance,
+		HIcon:         icon,
 		HCursor:       cursor,
 		HbrBackground: uintptr(colorWindow + 1),
 		LpszClassName: className,
+		HIconSm:       icon,
 	}
 	atom, _, regErr := procRegisterClassEx.Call(uintptr(unsafe.Pointer(&wc)))
 	if atom == 0 {
@@ -110,6 +118,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		if activeApp != nil {
 			activeApp.hwnd = hwnd
 			activeApp.initControls()
+			activeApp.initTray()
 			if err := activeApp.loadProfiles(); err != nil {
 				activeApp.resetDefaults()
 				activeApp.setText(idProfileName, "default")
@@ -130,7 +139,25 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			activeApp.refreshRuntimeViews()
 			return 0
 		}
+	case wmSize:
+		if activeApp != nil && wParam == sizeMinimized {
+			activeApp.hideToTray()
+			return 0
+		}
+	case wmClose:
+		if activeApp != nil && !activeApp.exitRequested {
+			activeApp.hideToTray()
+			return 0
+		}
+	case trayCallbackMsg:
+		if activeApp != nil {
+			activeApp.handleTrayMessage(lParam)
+			return 0
+		}
 	case wmDestroy:
+		if activeApp != nil {
+			activeApp.removeTray()
+		}
 		procKillTimer.Call(hwnd, timerRefreshID)
 		procPostQuitMessage.Call(0)
 		return 0

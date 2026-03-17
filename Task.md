@@ -168,3 +168,19 @@
 - [x] Diagnostics 页接入 runtime 摘要与 mount CLI 预览
 - [x] 为 mount runtime 状态机增加跨平台单测
 - [x] 更新 README 与 Iter 20 mount runtime 文档
+
+## Iter 21 — 托盘 / 后台驻留 / 通知
+- [x] Win32 客户端增加通知区托盘图标与托盘菜单
+- [x] 支持关闭/最小化后驻留托盘，双击托盘恢复主窗口
+- [x] 托盘菜单支持打开窗口、切换 Dashboard / Profiles / Diagnostics、启动/停止挂载、退出
+- [x] 关键状态切换（mounted / stopping / error / idle）通过托盘通知提示
+- [x] Dashboard 与 Diagnostics 补充托盘/后台驻留说明
+- [x] 更新 README 与 Iter 21 文档说明
+
+## Iter 22 — 真实 WinFsp host binding 收口到 mount runtime
+- [x] 新增 internal/winfsp binding 探测层，识别 WinFsp DLL / launcher 路径
+- [x] Windows host 在 runtime 构建前执行 WinFsp 原生 `FspFileSystemPreflight` 挂载点校验
+- [x] mount runtime snapshot / Dashboard / Diagnostics 展示 host binding 状态、DLL 路径、launcher 路径
+- [x] WinFsp host run 路径接入 binding 结果，缺少 WinFsp 或 mount-point preflight 失败时直接报错
+- [x] 为 binding 摘要增加跨平台单测
+- [x] 更新 README 与 Iter 22 文档说明

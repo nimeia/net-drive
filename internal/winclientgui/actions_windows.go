@@ -151,6 +151,7 @@ func (a *app) refreshRuntimeViews() {
 	a.setHeaderStatus(snapshot)
 	a.setText(idDashboardSummary, windowsText(a.dashboardSummary(snapshot)))
 	a.setText(idDiagnosticsSummary, windowsText(a.diagnosticsSummary(snapshot)))
+	a.syncTray(snapshot)
 }
 
 func (a *app) setHeaderStatus(snapshot winclientruntime.Snapshot) {
@@ -167,7 +168,7 @@ func (a *app) dashboardSummary(snapshot winclientruntime.Snapshot) string {
 		profile = "(unsaved draft)"
 	}
 	return fmt.Sprintf(
-		"Windows client shell\n\nPage: Dashboard\nCurrent profile: %s\nState: %s\nStatus: %s\nServer: %s\nMount point: %s\nVolume prefix: %s\nRemote path: %s\nClient instance: %s\nSession ID: %d\nPrincipal: %s\nServer version: %s %s\nLease expires: %s\nStore path: %s\n\nUse Start Mount / Stop Mount to exercise the WinFsp host lifecycle.\nUse Profiles to edit connection and mount settings.\nUse Diagnostics to run volume/getattr/readdir/read/materialize against the current profile.",
+		"Windows client shell\n\nPage: Dashboard\nCurrent profile: %s\nState: %s\nStatus: %s\nServer: %s\nMount point: %s\nVolume prefix: %s\nRemote path: %s\nClient instance: %s\nSession ID: %d\nPrincipal: %s\nServer version: %s %s\nLease expires: %s\nStore path: %s\nHost binding: %s\nHost DLL: %s\nLauncher: %s\n\nUse Start Mount / Stop Mount to exercise the WinFsp host lifecycle.\nTray: close or minimize the window to keep the client running in the notification area.\nUse Profiles to edit connection and mount settings.\nUse Diagnostics to run volume/getattr/readdir/read/materialize against the current profile.",
 		profile,
 		snapshot.Phase,
 		snapshot.StatusText,
@@ -182,6 +183,9 @@ func (a *app) dashboardSummary(snapshot winclientruntime.Snapshot) string {
 		emptyOrDraft(snapshot.ServerVersion, "-"),
 		emptyOrDraft(snapshot.ExpiresAt, "-"),
 		a.store.Path(),
+		emptyOrDraft(snapshot.HostBindingStatus, "-"),
+		emptyOrDraft(snapshot.HostDLLPath, "-"),
+		emptyOrDraft(snapshot.HostLauncherPath, "-"),
 	)
 }
 
@@ -194,6 +198,9 @@ func (a *app) diagnosticsSummary(snapshot winclientruntime.Snapshot) string {
 		fmt.Sprintf("Runtime phase: %s", snapshot.Phase),
 		fmt.Sprintf("Runtime status: %s", snapshot.StatusText),
 		fmt.Sprintf("Runtime error: %s", emptyOrDraft(snapshot.LastError, "-")),
+		fmt.Sprintf("Host binding: %s", emptyOrDraft(snapshot.HostBindingStatus, "-")),
+		fmt.Sprintf("Host DLL: %s", emptyOrDraft(snapshot.HostDLLPath, "-")),
+		fmt.Sprintf("Launcher: %s", emptyOrDraft(snapshot.HostLauncherPath, "-")),
 		fmt.Sprintf("Store path: %s", a.store.Path()),
 	}
 	if cfgErr == nil {

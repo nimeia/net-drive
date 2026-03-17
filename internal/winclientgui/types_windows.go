@@ -40,10 +40,18 @@ const (
 	swHide             = 0
 	swShow             = 5
 	swShowDefault      = 10
+	swRestore          = 9
 	wmCreate           = 0x0001
 	wmDestroy          = 0x0002
+	wmClose            = 0x0010
 	wmCommand          = 0x0111
 	wmTimer            = 0x0113
+	wmUser             = 0x0400
+	wmApp              = 0x8000
+	wmSize             = 0x0005
+	wmLButtonDblClk    = 0x0203
+	wmRButtonUp        = 0x0205
+	sizeMinimized      = 1
 	bnClicked          = 0
 	cbnSelChange       = 1
 	cbAddString        = 0x0143
@@ -54,7 +62,26 @@ const (
 	cbGetCurSel        = 0x0147
 	colorWindow        = 5
 	idcArrow           = 32512
+	idiApplication     = 32512
 	timerRefreshID     = 1
+	trayCallbackMsg    = wmApp + 1
+)
+
+const (
+	nimAdd         = 0x00000000
+	nimModify      = 0x00000001
+	nimDelete      = 0x00000002
+	nifMessage     = 0x00000001
+	nifIcon        = 0x00000002
+	nifTip         = 0x00000004
+	nifInfo        = 0x00000010
+	niifInfo       = 0x00000001
+	mfString       = 0x00000000
+	mfSeparator    = 0x00000800
+	tpmLeftAlign   = 0x0000
+	tpmBottomAlign = 0x0020
+	tpmRightButton = 0x0002
+	tpmReturnCmd   = 0x0100
 )
 
 const (
@@ -90,6 +117,16 @@ const (
 	idOutput
 )
 
+const (
+	idTrayOpen = 5001 + iota
+	idTrayDashboard
+	idTrayProfiles
+	idTrayDiagnostics
+	idTrayStartMount
+	idTrayStopMount
+	idTrayExit
+)
+
 type point struct {
 	X int32
 	Y int32
@@ -120,25 +157,51 @@ type wndClassEx struct {
 	HIconSm       uintptr
 }
 
+type notifyIconData struct {
+	CbSize           uint32
+	HWnd             uintptr
+	UID              uint32
+	UFlags           uint32
+	UCallbackMessage uint32
+	HIcon            uintptr
+	SzTip            [128]uint16
+	DwState          uint32
+	DwStateMask      uint32
+	SzInfo           [256]uint16
+	UVersion         uint32
+	SzInfoTitle      [64]uint16
+	DwInfoFlags      uint32
+}
+
 var (
 	user32               = syscall.NewLazyDLL("user32.dll")
 	kernel32             = syscall.NewLazyDLL("kernel32.dll")
+	shell32              = syscall.NewLazyDLL("shell32.dll")
+	procAppendMenu       = user32.NewProc("AppendMenuW")
+	procCreatePopupMenu  = user32.NewProc("CreatePopupMenu")
+	procDestroyMenu      = user32.NewProc("DestroyMenu")
 	procCreateWindowEx   = user32.NewProc("CreateWindowExW")
+	procDestroyWindow    = user32.NewProc("DestroyWindow")
 	procDefWindowProc    = user32.NewProc("DefWindowProcW")
 	procDispatchMessage  = user32.NewProc("DispatchMessageW")
 	procEnableWindow     = user32.NewProc("EnableWindow")
+	procGetCursorPos     = user32.NewProc("GetCursorPos")
 	procGetMessage       = user32.NewProc("GetMessageW")
 	procGetModuleHandle  = kernel32.NewProc("GetModuleHandleW")
 	procGetWindowText    = user32.NewProc("GetWindowTextW")
 	procGetWindowTextLen = user32.NewProc("GetWindowTextLengthW")
 	procKillTimer        = user32.NewProc("KillTimer")
 	procLoadCursor       = user32.NewProc("LoadCursorW")
+	procLoadIcon         = user32.NewProc("LoadIconW")
 	procPostQuitMessage  = user32.NewProc("PostQuitMessage")
 	procRegisterClassEx  = user32.NewProc("RegisterClassExW")
 	procSendMessage      = user32.NewProc("SendMessageW")
+	procSetForegroundWnd = user32.NewProc("SetForegroundWindow")
 	procSetTimer         = user32.NewProc("SetTimer")
 	procSetWindowText    = user32.NewProc("SetWindowTextW")
+	procShellNotifyIcon  = shell32.NewProc("Shell_NotifyIconW")
 	procShowWindow       = user32.NewProc("ShowWindow")
+	procTrackPopupMenu   = user32.NewProc("TrackPopupMenu")
 	procTranslateMessage = user32.NewProc("TranslateMessage")
 	procUpdateWindow     = user32.NewProc("UpdateWindow")
 )

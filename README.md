@@ -50,6 +50,7 @@ internal/
   client/      # compatibility wrapper for the demo CLI
   clientcore/  # protocol-facing runtime core for future WinFsp mount work
   mountcore/  # platform-neutral mount runtime for WinFsp-facing flows
+  winclientruntime/  # product-facing mount runtime state machine for the Windows shell
   platform/windows/  # Windows-specific path helpers and later semantic translators
   protocol/
   winfsp/
@@ -89,6 +90,7 @@ go test ./tests/integration -run 'TestControlPlaneNegative|TestSessionGatingAndP
 go test ./internal/server -run 'TestMetadataBackend|TestJournal|TestLoadServerConfig|TestSnapshotStatus|TestAuditLogger'
 go test ./internal/client
 go test ./internal/winclientstore
+go test ./internal/winclientruntime
 go test ./internal/transport -run 'TestEncodeDecodeFrameRoundTrip|TestDecodeFrameNegativePaths'
 go test ./internal/benchgate
 ```
@@ -116,7 +118,7 @@ Win32 config test UI build:
 go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devmount-client-win32
 ```
 
-The Win32 client console can edit server / token / path / local-path / mount-point style fields, save and reload named profiles, and run `volume|getattr|readdir|read|materialize` operations directly against `devmount-server`. The `materialize` flow recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools. The console also shows the equivalent `devmount-winfsp.exe` command line for copy/paste testing, and stores profiles under the user config directory for later reuse.
+The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
 
 Windows-only host shell compile check:
 
@@ -176,3 +178,5 @@ go run ./cmd/devmount-client
 
 - Windows client productization plan: `docs/architecture/windows-client-productization-plan.md`
 - Iter 18 Win32 client profile persistence baseline: `docs/architecture/windows-client-profile-persistence.md`
+- Iter 19 Windows client shell pages: `docs/architecture/windows-client-shell-pages.md`
+- Iter 20 Windows client mount runtime state machine: `docs/architecture/windows-client-mount-runtime.md`

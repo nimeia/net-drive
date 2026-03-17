@@ -153,3 +153,18 @@
 - [x] Win32 客户端界面增加 Profile Name / Saved Profiles / Save / Load / Delete
 - [x] 更新 README 与 Iter 18 文档说明
 - [x] 为配置存储层增加跨平台单测
+
+## Iter 19 — 主界面骨架拆分（Dashboard / Profiles / Diagnostics）
+- [x] 把 Win32 客户端单页测试窗体拆成 Dashboard / Profiles / Diagnostics 三页骨架
+- [x] 把现有 Profile / 配置编辑收敛到 Profiles 页
+- [x] 把高级 smoke 动作收敛到 Diagnostics 页
+- [x] Dashboard 页展示当前挂载状态、当前 Profile 与快捷动作
+- [x] 更新 README 与 Iter 19 界面骨架说明文档
+
+## Iter 20 — 真实 mount runtime 状态机接入 UI
+- [x] 新增 internal/winclientruntime，抽象 mount runtime builder / session / state machine
+- [x] 打通 connecting / mounted / stopping / idle / error 状态流转
+- [x] Dashboard 接入 Start Mount / Stop Mount，并实时展示 runtime 状态
+- [x] Diagnostics 页接入 runtime 摘要与 mount CLI 预览
+- [x] 为 mount runtime 状态机增加跨平台单测
+- [x] 更新 README 与 Iter 20 mount runtime 文档

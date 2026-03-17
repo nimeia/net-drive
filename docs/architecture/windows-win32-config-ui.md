@@ -15,12 +15,14 @@ Add a small native Win32 configuration window for local Windows smoke testing, w
   - mount point
   - volume prefix
   - path
+  - local path
   - offset
   - read length
   - max entries
-  - operation selector (`volume|getattr|readdir|read`)
+  - operation selector (`volume|getattr|readdir|read|materialize`)
 - output panel for direct test results
 - `Show CLI` action to generate the equivalent `devmount-winfsp.exe` command line
+- `materialize` action parameters to load remote content into a local directory
 - reusable `internal/winclient` package for config normalization, validation, CLI preview building, and protocol/mount smoke execution
 
 ## Why this shape

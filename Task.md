@@ -122,3 +122,10 @@
 - [x] 支持生成等价 devmount-winfsp CLI 预览
 - [x] 增加 winclient 单测
 - [x] 更新 README 与 Win32 配置测试界面说明文档
+
+## Iter 17 — 远端内容加载为本地文件
+- [x] 新增 internal/materialize，支持按远端路径递归下载到本地目录
+- [x] 为 materialize 增加单测，覆盖目录树、单文件和路径穿越防护
+- [x] cmd/devmount-winfsp 增加 `-op materialize` 与 `-local-path`
+- [x] Win32 配置测试界面增加 Local Path 字段，并支持 materialize 入口
+- [x] 更新 README 与本地加载设计文档

@@ -60,6 +60,7 @@ const (
 	idMountPoint
 	idVolumePrefix
 	idPath
+	idLocalPath
 	idOffset
 	idLength
 	idMaxEntries
@@ -171,8 +172,8 @@ func Run() error {
 		uintptr(wsOverlappedWindow|wsVisible),
 		cwUseDefault,
 		cwUseDefault,
-		980,
-		760,
+		1000,
+		820,
 		0,
 		0,
 		hInstance,
@@ -207,7 +208,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			activeApp.hwnd = hwnd
 			activeApp.initControls()
 			activeApp.resetDefaults()
-			activeApp.setOutput("Use this window to test volume / getattr / readdir / read against devmount-server.\r\nYou can also copy the equivalent devmount-winfsp.exe command line.\r\n")
+			activeApp.setOutput("Use this window to test volume / getattr / readdir / read, or materialize remote files into a local directory.\r\nThe equivalent devmount-winfsp.exe command line is shown by Show CLI.\r\n")
 		}
 		return 0
 	case wmCommand:
@@ -233,7 +234,7 @@ func (a *app) initControls() {
 	inputW := 280
 	rightLabelX := 460
 	rightInputX := 590
-	rightInputW := 160
+	rightInputW := 260
 
 	a.addLabel("Server Addr", xLabel, y, labelW, rowH)
 	a.addEdit(idAddr, xInput, y, inputW, rowH)
@@ -242,7 +243,7 @@ func (a *app) initControls() {
 	y += rowH + gap
 
 	a.addLabel("Token", xLabel, y, labelW, rowH)
-	a.addEdit(idToken, xInput, y, 610, rowH)
+	a.addEdit(idToken, xInput, y, 710, rowH)
 	y += rowH + gap
 
 	a.addLabel("Client Instance", xLabel, y, labelW, rowH)
@@ -257,8 +258,12 @@ func (a *app) initControls() {
 	a.addEdit(idVolumePrefix, rightInputX, y, rightInputW, rowH)
 	y += rowH + gap
 
-	a.addLabel("Path", xLabel, y, labelW, rowH)
-	a.addEdit(idPath, xInput, y, 610, rowH)
+	a.addLabel("Remote Path", xLabel, y, labelW, rowH)
+	a.addEdit(idPath, xInput, y, 710, rowH)
+	y += rowH + gap
+
+	a.addLabel("Local Path", xLabel, y, labelW, rowH)
+	a.addEdit(idLocalPath, xInput, y, 710, rowH)
 	y += rowH + gap
 
 	a.addLabel("Offset", xLabel, y, labelW, rowH)
@@ -271,19 +276,19 @@ func (a *app) initControls() {
 	a.addEdit(idMaxEntries, xInput, y, inputW, rowH)
 	y += rowH + 16
 
-	a.addButton(idRun, "Run Test", xLabel, y, 120, 28)
+	a.addButton(idRun, "Run / Load", xLabel, y, 120, 28)
 	a.addButton(idPreview, "Show CLI", xLabel+132, y, 120, 28)
 	a.addButton(idDefaults, "Defaults", xLabel+264, y, 120, 28)
 	a.addButton(idClear, "Clear Output", xLabel+396, y, 120, 28)
 	y += 44
 
-	a.addOutput(idOutput, xLabel, y, 930, 560)
+	a.addOutput(idOutput, xLabel, y, 950, 600)
 
 	combo := a.controls[idOperation]
 	for _, op := range a.operations {
 		procSendMessage.Call(combo, cbAddString, 0, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(string(op)))))
 	}
-	procSendMessage.Call(combo, cbSetCurSel, 2, 0)
+	procSendMessage.Call(combo, cbSetCurSel, uintptr(len(a.operations)-1), 0)
 }
 
 func (a *app) handleCommand(wParam uintptr) {
@@ -328,6 +333,9 @@ func (a *app) runSelectedOperation() {
 		a.setOutput("run failed: " + execErr.Error())
 		return
 	}
+	if op == winclient.OperationMaterialize {
+		output += "\nYou can now inspect the local directory with Explorer or an editor.\n"
+	}
 	a.setOutput(output)
 }
 
@@ -349,6 +357,7 @@ func (a *app) resetDefaults() {
 	a.setText(idMountPoint, cfg.MountPoint)
 	a.setText(idVolumePrefix, cfg.VolumePrefix)
 	a.setText(idPath, cfg.Path)
+	a.setText(idLocalPath, cfg.LocalPath)
 	a.setText(idOffset, strconv.FormatInt(cfg.Offset, 10))
 	a.setText(idLength, strconv.FormatUint(uint64(cfg.Length), 10))
 	a.setText(idMaxEntries, strconv.FormatUint(uint64(cfg.MaxEntries), 10))
@@ -363,6 +372,7 @@ func (a *app) readConfig() (winclient.Config, winclient.Operation, error) {
 		MountPoint:       a.text(idMountPoint),
 		VolumePrefix:     a.text(idVolumePrefix),
 		Path:             a.text(idPath),
+		LocalPath:        a.text(idLocalPath),
 	}
 	lease, err := parseUint32Field("lease seconds", a.text(idLeaseSeconds))
 	if err != nil {

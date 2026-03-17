@@ -11,16 +11,22 @@ if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
 New-Item -ItemType Directory -Path $dist -Force | Out-Null
 
 $targets = @(
-    @{ Name = "devmount-server.exe"; Package = "./cmd/devmount-server" },
-    @{ Name = "devmount-client.exe"; Package = "./cmd/devmount-client" },
-    @{ Name = "devmount-winfsp.exe"; Package = "./cmd/devmount-winfsp" }
+    @{ Name = "devmount-server.exe"; Package = "./cmd/devmount-server"; Ldflags = "" },
+    @{ Name = "devmount-client.exe"; Package = "./cmd/devmount-client"; Ldflags = "" },
+    @{ Name = "devmount-winfsp.exe"; Package = "./cmd/devmount-winfsp"; Ldflags = "" },
+    @{ Name = "devmount-client-win32.exe"; Package = "./cmd/devmount-client-win32"; Ldflags = "-H windowsgui" }
 )
 
 Push-Location $root
 try {
     foreach ($target in $targets) {
         $output = Join-Path $dist $target.Name
-        go build -o $output $target.Package
+        if ($target.Ldflags) {
+            go build -ldflags $target.Ldflags -o $output $target.Package
+        }
+        else {
+            go build -o $output $target.Package
+        }
         if ($LASTEXITCODE -ne 0) {
             throw "go build failed for $($target.Package)"
         }

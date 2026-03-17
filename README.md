@@ -41,6 +41,7 @@ cmd/
   devmount-server/
   devmount-client/
   devmount-winfsp/
+  devmount-client-win32/
 configs/
 docs/
   architecture/
@@ -107,6 +108,14 @@ go run ./cmd/devmount-winfsp -op readdir -path /
 go run ./cmd/devmount-winfsp -op read -path /README.md -length 64
 ```
 
+Win32 config test UI build:
+
+```powershell
+go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devmount-client-win32
+```
+
+The Win32 test UI can edit server / token / path / mount-point style fields and run `volume|getattr|readdir|read` checks directly against `devmount-server`. It also shows the equivalent `devmount-winfsp.exe` command line for copy/paste testing.
+
 Windows-only host shell compile check:
 
 ```bash
@@ -160,3 +169,4 @@ go run ./cmd/devmount-client
 - Iter 13 Windows client core / WinFsp integration plan: `docs/architecture/windows-client-core-and-winfsp.md`
 - Iter 14 WinFsp read-only MVP boundary: `docs/architecture/windows-winfsp-readonly-mvp.md`
 - Iter 15 WinFsp callback host / build tags: `docs/architecture/windows-winfsp-callback-host.md`
+- Iter 16 Win32 config test UI: `docs/architecture/windows-win32-config-ui.md`

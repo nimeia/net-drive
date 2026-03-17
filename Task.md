@@ -114,3 +114,11 @@
 - [x] 增加 callback mapping 单测
 - [x] 增加 Windows 交叉编译验证
 - [x] 输出 Iter 15 callback host / build-tags 设计文档
+
+## Iter 16 — Win32 配置测试界面
+- [x] 新增 internal/winclient，沉淀配置归一化 / 校验 / CLI 预览 / 执行逻辑
+- [x] 新增 cmd/devmount-client-win32 原生 Win32 配置测试窗口
+- [x] 支持 volume / getattr / readdir / read 四类本地测试动作
+- [x] 支持生成等价 devmount-winfsp CLI 预览
+- [x] 增加 winclient 单测
+- [x] 更新 README 与 Win32 配置测试界面说明文档

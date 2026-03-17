@@ -12,6 +12,7 @@ import (
 	"unsafe"
 
 	"developer-mount/internal/winclient"
+	"developer-mount/internal/winclientstore"
 )
 
 const (
@@ -46,6 +47,9 @@ const (
 	bnClicked          = 0
 	cbnSelChange       = 1
 	cbAddString        = 0x0143
+	cbGetLBTEXT        = 0x0148
+	cbGetLBTEXTLen     = 0x0149
+	cbResetContent     = 0x014B
 	cbSetCurSel        = 0x014E
 	cbGetCurSel        = 0x0147
 	colorWindow        = 5
@@ -53,7 +57,12 @@ const (
 )
 
 const (
-	idAddr = 1001 + iota
+	idProfileName = 1001 + iota
+	idSavedProfiles
+	idSaveProfile
+	idLoadProfile
+	idDeleteProfile
+	idAddr
 	idToken
 	idClientInstance
 	idLeaseSeconds
@@ -108,6 +117,8 @@ type app struct {
 	controls   map[int]uintptr
 	runner     winclient.Runner
 	operations []winclient.Operation
+	store      winclientstore.Store
+	state      winclientstore.State
 }
 
 var (
@@ -140,12 +151,17 @@ func Run() error {
 	if hInstance == 0 {
 		return fmt.Errorf("GetModuleHandleW failed: %w", err)
 	}
+	store, err := winclientstore.OpenDefault()
+	if err != nil {
+		return err
+	}
 
 	a := &app{
 		hInstance:  hInstance,
 		controls:   map[int]uintptr{},
 		runner:     winclient.NewRunner(),
 		operations: winclient.Operations(),
+		store:      store,
 	}
 	activeApp = a
 
@@ -164,7 +180,7 @@ func Run() error {
 		return fmt.Errorf("RegisterClassExW failed: %w", regErr)
 	}
 
-	title := syscall.StringToUTF16Ptr("Developer Mount Win32 Config Test")
+	title := syscall.StringToUTF16Ptr("Developer Mount Win32 Client Console")
 	hwnd, _, createErr := procCreateWindowEx.Call(
 		0,
 		uintptr(unsafe.Pointer(className)),
@@ -172,8 +188,8 @@ func Run() error {
 		uintptr(wsOverlappedWindow|wsVisible),
 		cwUseDefault,
 		cwUseDefault,
-		1000,
-		820,
+		1040,
+		900,
 		0,
 		0,
 		hInstance,
@@ -207,8 +223,13 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		if activeApp != nil {
 			activeApp.hwnd = hwnd
 			activeApp.initControls()
-			activeApp.resetDefaults()
-			activeApp.setOutput("Use this window to test volume / getattr / readdir / read, or materialize remote files into a local directory.\r\nThe equivalent devmount-winfsp.exe command line is shown by Show CLI.\r\n")
+			if err := activeApp.loadProfiles(); err != nil {
+				activeApp.resetDefaults()
+				activeApp.setText(idProfileName, "default")
+				activeApp.setOutput("profile store load failed: " + err.Error())
+			} else {
+				activeApp.setOutput("Win32 client console ready. Save named profiles, reload them later, and run volume / getattr / readdir / read / materialize checks.\r\nProfile store: " + activeApp.store.Path())
+			}
 		}
 		return 0
 	case wmCommand:
@@ -234,7 +255,16 @@ func (a *app) initControls() {
 	inputW := 280
 	rightLabelX := 460
 	rightInputX := 590
-	rightInputW := 260
+	rightInputW := 300
+
+	a.addLabel("Profile Name", xLabel, y, labelW, rowH)
+	a.addEdit(idProfileName, xInput, y, 200, rowH)
+	a.addLabel("Saved Profiles", rightLabelX, y, 116, rowH)
+	a.addCombo(idSavedProfiles, rightInputX, y, 180, 160)
+	a.addButton(idSaveProfile, "Save Profile", 786, y-2, 110, 28)
+	a.addButton(idLoadProfile, "Load", 902, y-2, 60, 28)
+	a.addButton(idDeleteProfile, "Delete", 966, y-2, 60, 28)
+	y += rowH + gap
 
 	a.addLabel("Server Addr", xLabel, y, labelW, rowH)
 	a.addEdit(idAddr, xInput, y, inputW, rowH)
@@ -243,7 +273,7 @@ func (a *app) initControls() {
 	y += rowH + gap
 
 	a.addLabel("Token", xLabel, y, labelW, rowH)
-	a.addEdit(idToken, xInput, y, 710, rowH)
+	a.addEdit(idToken, xInput, y, 886, rowH)
 	y += rowH + gap
 
 	a.addLabel("Client Instance", xLabel, y, labelW, rowH)
@@ -259,11 +289,11 @@ func (a *app) initControls() {
 	y += rowH + gap
 
 	a.addLabel("Remote Path", xLabel, y, labelW, rowH)
-	a.addEdit(idPath, xInput, y, 710, rowH)
+	a.addEdit(idPath, xInput, y, 886, rowH)
 	y += rowH + gap
 
 	a.addLabel("Local Path", xLabel, y, labelW, rowH)
-	a.addEdit(idLocalPath, xInput, y, 710, rowH)
+	a.addEdit(idLocalPath, xInput, y, 886, rowH)
 	y += rowH + gap
 
 	a.addLabel("Offset", xLabel, y, labelW, rowH)
@@ -282,7 +312,7 @@ func (a *app) initControls() {
 	a.addButton(idClear, "Clear Output", xLabel+396, y, 120, 28)
 	y += 44
 
-	a.addOutput(idOutput, xLabel, y, 950, 600)
+	a.addOutput(idOutput, xLabel, y, 1010, 650)
 
 	combo := a.controls[idOperation]
 	for _, op := range a.operations {
@@ -306,15 +336,139 @@ func (a *app) handleCommand(wParam uintptr) {
 	case idDefaults:
 		if code == bnClicked {
 			a.resetDefaults()
+			a.setOutput("restored default in-memory settings; use Save Profile to persist them")
 		}
 	case idClear:
 		if code == bnClicked {
 			a.setOutput("")
 		}
+	case idSaveProfile:
+		if code == bnClicked {
+			a.saveProfile()
+		}
+	case idLoadProfile:
+		if code == bnClicked {
+			a.loadSelectedProfile()
+		}
+	case idDeleteProfile:
+		if code == bnClicked {
+			a.deleteSelectedProfile()
+		}
+	case idSavedProfiles:
+		if code == cbnSelChange {
+			name := a.selectedComboText(idSavedProfiles)
+			if name != "" {
+				a.setText(idProfileName, name)
+			}
+		}
 	case idOperation:
 		if code == cbnSelChange {
 			a.showCLIPreview()
 		}
+	}
+}
+
+func (a *app) loadProfiles() error {
+	state, err := a.store.Load()
+	if err != nil {
+		return err
+	}
+	a.state = state
+	a.populateProfileList()
+	if cfg, ok := state.Profiles[state.ActiveProfile]; ok {
+		a.applyConfig(cfg)
+		a.setText(idProfileName, state.ActiveProfile)
+		return nil
+	}
+	a.resetDefaults()
+	if state.ActiveProfile != "" {
+		a.setText(idProfileName, state.ActiveProfile)
+	} else {
+		a.setText(idProfileName, "default")
+	}
+	return nil
+}
+
+func (a *app) saveProfile() {
+	cfg, err := a.readConfigFields()
+	if err != nil {
+		a.setOutput("configuration error: " + err.Error())
+		return
+	}
+	name := strings.TrimSpace(a.text(idProfileName))
+	state, err := a.store.SaveProfile(name, cfg)
+	if err != nil {
+		a.setOutput("save profile failed: " + err.Error())
+		return
+	}
+	a.state = state
+	a.populateProfileList()
+	a.setOutput("saved profile \"" + name + "\" to " + a.store.Path())
+}
+
+func (a *app) loadSelectedProfile() {
+	name := strings.TrimSpace(a.text(idProfileName))
+	if name == "" {
+		name = a.selectedComboText(idSavedProfiles)
+	}
+	if name == "" {
+		a.setOutput("load profile failed: select or type a profile name")
+		return
+	}
+	cfg, ok := a.state.Profiles[name]
+	if !ok {
+		a.setOutput("load profile failed: profile \"" + name + "\" not found")
+		return
+	}
+	a.applyConfig(cfg)
+	a.state.ActiveProfile = name
+	if err := a.store.Save(a.state); err != nil {
+		a.setOutput("profile loaded but active-profile save failed: " + err.Error())
+		return
+	}
+	a.populateProfileList()
+	a.setText(idProfileName, name)
+	a.setOutput("loaded profile \"" + name + "\"")
+}
+
+func (a *app) deleteSelectedProfile() {
+	name := strings.TrimSpace(a.text(idProfileName))
+	if name == "" {
+		name = a.selectedComboText(idSavedProfiles)
+	}
+	state, err := a.store.DeleteProfile(name)
+	if err != nil {
+		a.setOutput("delete profile failed: " + err.Error())
+		return
+	}
+	a.state = state
+	a.populateProfileList()
+	if cfg, ok := a.state.Profiles[a.state.ActiveProfile]; ok {
+		a.applyConfig(cfg)
+		a.setText(idProfileName, a.state.ActiveProfile)
+	} else {
+		a.resetDefaults()
+		a.setText(idProfileName, "default")
+	}
+	a.setOutput("deleted profile \"" + name + "\"")
+}
+
+func (a *app) populateProfileList() {
+	combo := a.controls[idSavedProfiles]
+	procSendMessage.Call(combo, cbResetContent, 0, 0)
+	selectedIndex := uintptr(0)
+	hasSelection := false
+	for index, name := range winclientstore.SortedProfileNames(a.state) {
+		procSendMessage.Call(combo, cbAddString, 0, uintptr(unsafe.Pointer(syscall.StringToUTF16Ptr(name))))
+		if name == a.state.ActiveProfile {
+			selectedIndex = uintptr(index)
+			hasSelection = true
+		}
+	}
+	if hasSelection {
+		procSendMessage.Call(combo, cbSetCurSel, selectedIndex, 0)
+	} else {
+		procSendMessage.Call(combo, cbSetCurSel, ^uintptr(0), 0)
 	}
 }
 
@@ -349,7 +503,12 @@ func (a *app) showCLIPreview() {
 }
 
 func (a *app) resetDefaults() {
-	cfg := winclient.DefaultConfig()
+	a.applyConfig(winclient.DefaultConfig())
+	procSendMessage.Call(a.controls[idOperation], cbSetCurSel, 2, 0)
+}
+
+func (a *app) applyConfig(cfg winclient.Config) {
+	cfg = cfg.Normalized()
 	a.setText(idAddr, cfg.Addr)
 	a.setText(idToken, cfg.Token)
 	a.setText(idClientInstance, cfg.ClientInstanceID)
@@ -361,10 +520,24 @@ func (a *app) resetDefaults() {
 	a.setText(idOffset, strconv.FormatInt(cfg.Offset, 10))
 	a.setText(idLength, strconv.FormatUint(uint64(cfg.Length), 10))
 	a.setText(idMaxEntries, strconv.FormatUint(uint64(cfg.MaxEntries), 10))
-	procSendMessage.Call(a.controls[idOperation], cbSetCurSel, 2, 0)
 }
 
 func (a *app) readConfig() (winclient.Config, winclient.Operation, error) {
+	cfg, err := a.readConfigFields()
+	if err != nil {
+		return winclient.Config{}, "", err
+	}
+	op, err := a.selectedOperation()
+	if err != nil {
+		return winclient.Config{}, "", err
+	}
+	if err := cfg.Validate(op); err != nil {
+		return winclient.Config{}, "", err
+	}
+	return cfg, op, nil
+}
+
+func (a *app) readConfigFields() (winclient.Config, error) {
 	cfg := winclient.Config{
 		Addr:             a.text(idAddr),
 		Token:            a.text(idToken),
@@ -376,31 +549,33 @@ func (a *app) readConfig() (winclient.Config, winclient.Operation, error) {
 	}
 	lease, err := parseUint32Field("lease seconds", a.text(idLeaseSeconds))
 	if err != nil {
-		return winclient.Config{}, "", err
+		return winclient.Config{}, err
 	}
 	offset, err := parseInt64Field("offset", a.text(idOffset))
 	if err != nil {
-		return winclient.Config{}, "", err
+		return winclient.Config{}, err
 	}
 	length, err := parseUint32Field("read length", a.text(idLength))
 	if err != nil {
-		return winclient.Config{}, "", err
+		return winclient.Config{}, err
 	}
 	maxEntries, err := parseUint32Field("max entries", a.text(idMaxEntries))
 	if err != nil {
-		return winclient.Config{}, "", err
+		return winclient.Config{}, err
 	}
 	cfg.LeaseSeconds = lease
 	cfg.Offset = offset
 	cfg.Length = length
 	cfg.MaxEntries = maxEntries
+	return cfg.Normalized(), nil
+}
 
+func (a *app) selectedOperation() (winclient.Operation, error) {
 	index, _, _ := procSendMessage.Call(a.controls[idOperation], cbGetCurSel, 0, 0)
 	if int(index) < 0 || int(index) >= len(a.operations) {
-		return winclient.Config{}, "", fmt.Errorf("select an operation")
+		return "", fmt.Errorf("select an operation")
 	}
-	op := a.operations[int(index)]
-	return cfg.Normalized(), op, nil
+	return a.operations[int(index)], nil
 }
 
 func parseUint32Field(name, value string) (uint32, error) {
@@ -474,6 +649,18 @@ func (a *app) text(id int) string {
 	length, _, _ := procGetWindowTextLen.Call(hwnd)
 	buf := make([]uint16, length+1)
 	procGetWindowText.Call(hwnd, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	return syscall.UTF16ToString(buf)
+}
+
+func (a *app) selectedComboText(id int) string {
+	combo := a.controls[id]
+	index, _, _ := procSendMessage.Call(combo, cbGetCurSel, 0, 0)
+	if int(index) < 0 {
+		return ""
+	}
+	length, _, _ := procSendMessage.Call(combo, cbGetLBTEXTLen, index, 0)
+	buf := make([]uint16, int(length)+1)
+	procSendMessage.Call(combo, cbGetLBTEXT, index, uintptr(unsafe.Pointer(&buf[0])))
 	return syscall.UTF16ToString(buf)
 }
 

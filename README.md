@@ -88,6 +88,7 @@ go test ./...
 go test ./tests/integration -run 'TestControlPlaneNegative|TestSessionGatingAndProtocolErrorMapping|TestRecovery|TestMultiClientConcurrentCreateWriteRenameAndWatch|TestHeartbeatInterleavesWithFileOperations|TestConnectionJitterRepeatedResumeAndRead|TestRealisticMixedBrowseSaveWatchPressure|TestServerAndClientBinarySmoke'
 go test ./internal/server -run 'TestMetadataBackend|TestJournal|TestLoadServerConfig|TestSnapshotStatus|TestAuditLogger'
 go test ./internal/client
+go test ./internal/winclientstore
 go test ./internal/transport -run 'TestEncodeDecodeFrameRoundTrip|TestDecodeFrameNegativePaths'
 go test ./internal/benchgate
 ```
@@ -115,7 +116,7 @@ Win32 config test UI build:
 go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devmount-client-win32
 ```
 
-The Win32 test UI can edit server / token / path / local-path / mount-point style fields and run `volume|getattr|readdir|read|materialize` operations directly against `devmount-server`. The new `materialize` flow recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools. It also shows the equivalent `devmount-winfsp.exe` command line for copy/paste testing.
+The Win32 client console can edit server / token / path / local-path / mount-point style fields, save and reload named profiles, and run `volume|getattr|readdir|read|materialize` operations directly against `devmount-server`. The `materialize` flow recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools. The console also shows the equivalent `devmount-winfsp.exe` command line for copy/paste testing, and stores profiles under the user config directory for later reuse.
 
 Windows-only host shell compile check:
 
@@ -172,3 +173,6 @@ go run ./cmd/devmount-client
 - Iter 15 WinFsp callback host / build tags: `docs/architecture/windows-winfsp-callback-host.md`
 - Iter 16 Win32 config test UI: `docs/architecture/windows-win32-config-ui.md`
 - Iter 17 Local materialize bridge for Windows testing: `docs/architecture/windows-local-materialize.md`
+
+- Windows client productization plan: `docs/architecture/windows-client-productization-plan.md`
+- Iter 18 Win32 client profile persistence baseline: `docs/architecture/windows-client-profile-persistence.md`

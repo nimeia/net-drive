@@ -129,3 +129,27 @@
 - [x] cmd/devmount-winfsp 增加 `-op materialize` 与 `-local-path`
 - [x] Win32 配置测试界面增加 Local Path 字段，并支持 materialize 入口
 - [x] 更新 README 与本地加载设计文档
+
+
+## Windows 客户端产品化计划（Epic）
+
+| Epic | 范围 | 优先级 | 依赖 | 验收标准 |
+| --- | --- | --- | --- | --- |
+| E1 | 真实挂载运行时与 WinFsp 生命周期 | P0 | Iter 15 callback host 基线 | 支持真实 mount / unmount，Explorer 可见，状态机可观测 |
+| E2 | Windows 产品化主界面 | P0 | E1 运行时状态、E3 配置 | 具备 Dashboard / Mounts / Settings / Diagnostics 主流程 |
+| E3 | 配置持久化与凭据安全 | P0/P1 | 无 | 支持多 Profile、启动恢复最近配置、敏感信息安全存储 |
+| E4 | 托盘、后台驻留与通知 | P0/P1 | E2 UI 主壳、E7 状态事件 | 托盘可驻留并控制挂载，关键事件有通知 |
+| E5 | 诊断、自检与日志 | P0/P1 | E1/E7 运行时事件 | 有日志、自检、错误映射和诊断导出 |
+| E6 | 安装、升级、卸载与发布 | P1 | E5 依赖检查、构建脚本 | 正式安装包可安装 / 升级 / 卸载 |
+| E7 | 连接、会话恢复与自动重连 | P1 | clientcore 状态与恢复基线 | 断网恢复、认证恢复、启动恢复上次挂载 |
+| E8 | 质量保障与测试体系 | P0/P1 | 各 Epic 核心逻辑 | 核心状态机、配置层、安装链路有自动化与 smoke 验证 |
+| E9 | 文件系统语义与性能优化 | P1/P2 | E1 真实挂载 | Explorer / 编辑器兼容性和性能持续收口 |
+| E10 | 增强功能与企业化能力 | P2/P3 | E3/E5/E6 | 模板配置、静默安装、策略约束等能力逐步补齐 |
+
+## Iter 18 — Win32 客户端 Profile 持久化基线
+- [x] 把 Windows 客户端产品化计划正式落盘到项目文档
+- [x] 新增 internal/winclientstore，支持配置文件路径解析、JSON 持久化、Profile 保存 / 加载 / 删除
+- [x] 启动时恢复最近一次激活的 Profile
+- [x] Win32 客户端界面增加 Profile Name / Saved Profiles / Save / Load / Delete
+- [x] 更新 README 与 Iter 18 文档说明
+- [x] 为配置存储层增加跨平台单测

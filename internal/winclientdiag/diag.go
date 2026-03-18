@@ -377,7 +377,7 @@ func Export(path string, report Report) (string, error) {
 	manifest := winclientrelease.NewManifest("", nil, report.CallbackTable, report.ExplorerMatrix, report.SmokeScenarios)
 	closure := winclientrelease.NewReleaseClosure(manifest, validation)
 	issues := winclientrelease.NewPreReleaseIssueList(manifest, validation, closure)
-	patch := winclientrelease.ValidationPatch{Environment: winclientrelease.HostEnvironment{Source: "real-windows-host", PackageChannel: "msi,exe"}, Notes: []string{"Fill this patch with first-pass Windows host validation results before re-finalizing the release."}}
+	patch := winclientrelease.NewValidationPatchTemplate(validation)
 	if err := writeZipEntry(zw, "windows-host-backfill-patch-template.md", []byte(`# Windows Host Backfill Patch Template
 
 Update the matching JSON file with first-pass Windows host results, then merge it into windows-host-validation-result-template.json.
@@ -409,6 +409,28 @@ Update the matching JSON file with first-pass Windows host results, then merge i
 		return "", err
 	}
 	if err := writeZipEntry(zw, "windows-pre-release-issues.json", append(issuePayload, byte(10))); err != nil {
+		return "", err
+	}
+	fixPlan := winclientrelease.NewFirstPassFixPlan(manifest, validation, issues)
+	if err := writeZipEntry(zw, "windows-first-pass-fix-plan.md", []byte(fixPlan.Markdown())); err != nil {
+		return "", err
+	}
+	fixPlanPayload, err := fixPlan.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-first-pass-fix-plan.json", append(fixPlanPayload, byte(10))); err != nil {
+		return "", err
+	}
+	rc := winclientrelease.NewReleaseCandidate(manifest, validation, closure, issues)
+	if err := writeZipEntry(zw, "windows-release-candidate.md", []byte(rc.Markdown())); err != nil {
+		return "", err
+	}
+	rcPayload, err := rc.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-release-candidate.json", append(rcPayload, byte(10))); err != nil {
 		return "", err
 	}
 	if err := zw.Close(); err != nil {

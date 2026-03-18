@@ -240,3 +240,12 @@ Apply a first-pass Windows host backfill patch:
   -PatchJson .\dist\windows-release\windows-host-backfill-patch-template.json \
   -CompletedBy "<tester>"
 ```
+
+
+## Windows host result backfill and RC packaging
+
+- First-pass Windows host fixes: `docs/architecture/windows-host-first-pass-fixes.md`
+- RC finalization: `docs/architecture/windows-release-rc-finalization.md`
+- Backfill validation: `scripts/backfill-windows-validation.ps1`
+- Finalize release closure / issue list / fix plan / RC: `scripts/finalize-windows-release.ps1`
+- Package RC directory: `scripts/package-windows-rc.ps1`

@@ -43,7 +43,7 @@ func TestCheckerRunAndExport(t *testing.T) {
 	for _, f := range zr.File {
 		have[f.Name] = true
 	}
-	for _, want := range []string{"report.txt", "report.json", "explorer-smoke.md", "explorer-smoke.json", "explorer-request-matrix.md", "explorer-request-matrix.json", "winfsp-native-callbacks.md", "winfsp-native-callbacks.json", "recovery.json", "log-tail.txt", "windows-host-validation-template.md", "windows-host-validation-template.json", "windows-host-validation-result-template.md", "windows-host-validation-result-template.json", "windows-release-closure-template.md", "windows-release-closure-template.json"} {
+	for _, want := range []string{"report.txt", "report.json", "explorer-smoke.md", "explorer-smoke.json", "explorer-request-matrix.md", "explorer-request-matrix.json", "winfsp-native-callbacks.md", "winfsp-native-callbacks.json", "recovery.json", "log-tail.txt", "windows-host-validation-template.md", "windows-host-validation-template.json", "windows-host-validation-result-template.md", "windows-host-validation-result-template.json", "windows-host-backfill-patch-template.md", "windows-host-backfill-patch-template.json", "windows-release-closure-template.md", "windows-release-closure-template.json", "windows-pre-release-issues.md", "windows-pre-release-issues.json", "windows-first-pass-fix-plan.md", "windows-first-pass-fix-plan.json", "windows-release-candidate.md", "windows-release-candidate.json"} {
 		if !have[want] {
 			t.Fatalf("zip missing %q", want)
 		}

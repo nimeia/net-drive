@@ -23,10 +23,13 @@ $manifest = [ordered]@{
   validation_template = "windows-host-validation-template.json"
   validation_result = "windows-host-validation-result-template.json"
   backfill_patch = "windows-host-backfill-patch-template.json"
-  release_closure = "windows-release-closure-template.json"
-  issue_list = "windows-pre-release-issues-template.json"
+  release_closure = "windows-release-closure.json"
+  issue_list = "windows-pre-release-issues.json"
+  fix_plan = "windows-first-pass-fix-plan.json"
+  release_candidate = "windows-release-candidate.json"
+  final_status = "needs-validation"
 }
-$manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $release "release-manifest.json")
+$manifest | ConvertTo-Json -Depth 16 | Set-Content -Encoding UTF8 (Join-Path $release "release-manifest.json")
 @"
 # Windows Release Validation
 
@@ -46,7 +49,8 @@ Version: $Version
 - Run the Explorer smoke checklist on a Windows host.
 - Export diagnostics after smoke and archive the bundle.
 - Apply windows-host-backfill-patch-template.json after each validation round.
-- Regenerate closure and issue list outputs after each backfill.
+- Merge windows-installer-results-template.json after each install/upgrade/uninstall round.
+- Regenerate closure, issue list, fix plan, and RC outputs after each backfill.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "release-validation.md")
 
 @"
@@ -79,6 +83,9 @@ Status: NOT-RUN
 - [ ] explorer-readonly-copy
 - [ ] explorer-properties
 - [ ] explorer-delete-denied
+- [ ] explorer-create-denied
+- [ ] explorer-write-denied
+- [ ] explorer-rename-denied
 - [ ] explorer-diagnostics
 - [ ] explorer-unmount-cleanup
 
@@ -87,7 +94,26 @@ Status: NOT-RUN
 - [ ] relaunch warning captured
 - [ ] clean stop recorded
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-validation-template.md")
+Copy-Item (Join-Path $release "windows-host-validation-template.json") (Join-Path $release "windows-host-validation-result-template.json") -Force
+Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path $release "windows-host-validation-result-template.md") -Force
 
+@"
+{
+  "version": "$Version",
+  "log_dir": "",
+  "msi": {
+    "install": {"status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""},
+    "upgrade": {"status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""},
+    "uninstall": {"status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""}
+  },
+  "exe": {
+    "portable_launch": {"status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""}
+  },
+  "notes": [
+    "Backfill this file after running the real Windows host installer checks."
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-installer-results-template.json")
 @"
 # Windows Installer Results Template
 
@@ -102,22 +128,8 @@ Version: $Version
 - [ ] portable launch
 
 ## Notes
-- Fill this file together with windows-host-validation-template.json after running real Windows-host validation.
+- Fill this file together with windows-host-validation-result-template.json after running real Windows-host validation.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-installer-results-template.md")
-
-@"
-{
-  "version": "$Version",
-  "msi": {"install": "not-run", "upgrade": "not-run", "uninstall": "not-run"},
-  "exe": {"portable_launch": "not-run"},
-  "notes": [
-    "Backfill this file after running the real Windows host installer checks."
-  ]
-}
-"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-installer-results-template.json")
-
-Copy-Item (Join-Path $release "windows-host-validation-template.json") (Join-Path $release "windows-host-validation-result-template.json") -Force
-Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path $release "windows-host-validation-result-template.md") -Force
 
 @"
 {
@@ -131,18 +143,36 @@ Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path 
     "installer_log_dir": ""
   },
   "explorer_scenarios": [
-    {"scenario_id": "explorer-mount-visible", "status": "not-run", "notes": ""}
+    {"scenario_id": "explorer-mount-visible", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-root-browse", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-file-preview", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-readonly-copy", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-properties", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-delete-denied", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-create-denied", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-write-denied", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-rename-denied", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-diagnostics", "status": "not-run", "notes": ""},
+    {"scenario_id": "explorer-unmount-cleanup", "status": "not-run", "notes": ""}
   ],
   "installer_checklist": [
+    {"item": "WinFsp installed and version captured", "status": "not-run", "notes": ""},
     {"item": "MSI install succeeded", "status": "not-run", "notes": ""},
-    {"item": "EXE/portable bundle launch succeeded", "status": "not-run", "notes": ""}
+    {"item": "EXE/portable bundle launch succeeded", "status": "not-run", "notes": ""},
+    {"item": "Shortcuts / tray / Dashboard available after install", "status": "not-run", "notes": ""},
+    {"item": "Upgrade path preserves config", "status": "not-run", "notes": ""},
+    {"item": "Uninstall removes binaries and leaves expected user data policy", "status": "not-run", "notes": ""}
   ],
   "recovery_checklist": [
-    {"item": "Next launch reports recovery warning", "status": "not-run", "notes": ""}
+    {"item": "Dirty-exit marker written during forced termination", "status": "not-run", "notes": ""},
+    {"item": "Next launch reports recovery warning", "status": "not-run", "notes": ""},
+    {"item": "Clean stop clears recovery marker state", "status": "not-run", "notes": ""}
   ],
   "installer_runs": [
-    {"channel": "msi", "action": "install", "status": "not-run", "version_to": "$Version", "log_path": ""},
-    {"channel": "exe", "action": "portable-launch", "status": "not-run", "version_to": "$Version", "log_path": ""}
+    {"channel": "msi", "action": "install", "status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""},
+    {"channel": "msi", "action": "upgrade", "status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""},
+    {"channel": "msi", "action": "uninstall", "status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""},
+    {"channel": "exe", "action": "portable-launch", "status": "not-run", "version_to": "$Version", "log_path": "", "notes": ""}
   ],
   "notes": [
     "Fill only the fields observed during the current Windows host validation round."
@@ -154,38 +184,24 @@ Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path 
 
 Version: $Version
 
-Use `windows-host-backfill-patch-template.json` to record the first-pass Windows host results observed on the test machine. Merge the patch into `windows-host-validation-result-template.json`, then regenerate closure and issue-list outputs.
+Use `windows-host-backfill-patch-template.json` to record the first-pass Windows host results observed on the test machine. Merge the patch into `windows-host-validation-result-template.json`, then regenerate closure, issue-list, fix-plan, and RC outputs.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-backfill-patch-template.md")
-
-@"
-# Windows Release Closure Template
-
-Version: $Version
-State: NOT-READY
-
-## Outstanding items
-- [ ] Backfill windows-host-validation-result-template.json
-- [ ] MSI install passed
-- [ ] MSI upgrade passed
-- [ ] MSI uninstall passed
-- [ ] EXE portable launch passed
-- [ ] Validation marked completed
-"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.md")
 
 @"
 {
   "version": "$Version",
   "release_ready": false,
   "reasons": [
-    "validation record still contains not-run checks",
-    "installer run msi/install has not passed",
-    "installer run msi/upgrade has not passed",
-    "installer run msi/uninstall has not passed",
-    "installer run exe/portable-launch has not passed",
-    "validation record is not marked completed"
+    "validation record still contains not-run checks"
   ]
 }
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.json")
+@"
+# Windows Release Closure Template
+
+Version: $Version
+State: NOT-READY
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.md")
 
 @"
 {
@@ -211,9 +227,50 @@ State: NOT-READY
 
 Version: $Version
 Release state: NOT READY
-
-- [BLOCKER/OPEN] Mount becomes visible in Explorer
-  - evidence: scenario not yet executed on a Windows host
-  - remediation: Run the scenario and backfill the result.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-pre-release-issues-template.md")
+
+@"
+{
+  "version": "$Version",
+  "blockers": 1,
+  "warnings": 0,
+  "infos": 0,
+  "items": [
+    {
+      "id": "scenario-explorer-mount-visible",
+      "severity": "blocker",
+      "category": "explorer",
+      "title": "Mount becomes visible in Explorer",
+      "evidence": "scenario not yet executed on a Windows host",
+      "remediation": "Run the scenario and backfill the result.",
+      "suggested_area": "winfsp-native-callbacks",
+      "suggested_files": ["internal/winfsp/callbacks.go", "internal/winclientsmoke/request_matrix.go"]
+    }
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-first-pass-fix-plan-template.json")
+@"
+# Windows First-Pass Fix Plan Template
+
+Version: $Version
+Blockers: 1
+Warnings: 0
+Infos: 0
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-first-pass-fix-plan-template.md")
+
+@"
+{
+  "version": "$Version",
+  "channel": "rc",
+  "release_ready": false,
+  "final_status": "needs-validation"
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-candidate-template.json")
+@"
+# Windows Release Candidate Template
+
+Version: $Version
+Channel: rc
+Final status: needs-validation
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-candidate-template.md")
 Write-Host "Prepared Windows release assets at $release"

@@ -311,3 +311,17 @@
 - [x] diagnostics 导出新增 windows-pre-release-issues 模板
 - [x] 为 issue list 生成增加单测
 - [x] 更新 README 与 Iter 37/38 文档说明
+
+## Iter 39 — 基于 Windows 主机首轮结果做真实问题修复
+- [x] 新增完整 ValidationPatch 模板生成，覆盖 explorer / installer / recovery / installer runs
+- [x] 新增 InstallerResultSet，并支持把 MSI/EXE 首轮结果合并回 validation result
+- [x] 新增 FirstPassFixPlan，基于 validation + issues 生成首轮修复计划
+- [x] diagnostics / release 导出新增 fix plan 与完整 backfill patch 模板
+- [x] 更新 README 与 Iter 39 文档说明
+
+## Iter 40 — 发布候选版 RC 收口与最终打包
+- [x] 新增 ReleaseCandidate，汇总 manifest / validation / closure / issue list 为 RC 元数据
+- [x] finalize-windows-release.ps1 输出 closure / issues / fix plan / RC 四类最终文件
+- [x] 新增 package-windows-rc.ps1，生成 windows-rc 目录
+- [x] release manifest 增加 fix plan / release candidate 路径
+- [x] 更新 README 与 Iter 40 文档说明

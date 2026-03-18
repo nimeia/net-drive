@@ -220,6 +220,9 @@ func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 	}
 	host.SetBinding(binding)
 	hostBinding := host.Binding()
+	if supportErr := hostBinding.MountRuntimeSupportError(); supportErr != nil {
+		return nil, fmt.Errorf("%w (binding=%s)", supportErr, hostBinding.Summary())
+	}
 	cleanup = false
 	return defaultSession{client: cli, host: host, info: SessionInfo{ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, SessionID: sessionResp.SessionID, PrincipalID: authResp.PrincipalID, ServerName: helloResp.ServerName, ServerVersion: helloResp.ServerVersion, ExpiresAt: sessionResp.ExpiresAt, RequestedBackend: hostBinding.RequestedBackend, HostBackend: hostBinding.EffectiveBackend, HostDLLPath: hostBinding.DLLPath, HostLauncherPath: hostBinding.LauncherPath, HostBindingStatus: hostBinding.Summary(), HostDispatcherState: hostBinding.DispatcherStatus}}, nil
 }

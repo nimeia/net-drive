@@ -2,6 +2,8 @@ package winclient
 
 import (
 	"fmt"
+	"os"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -39,7 +41,7 @@ type Config struct {
 }
 
 func DefaultConfig() Config {
-	return Config{Addr: "127.0.0.1:17890", Token: "devmount-dev-token", ClientInstanceID: "win32-test-ui", LeaseSeconds: 30, MountPoint: "M:", VolumePrefix: "devmount", Path: "/", LocalPath: "devmount-local", HostBackend: HostBackendAuto, Offset: 0, Length: 64, MaxEntries: 32}
+	return Config{Addr: "127.0.0.1:17890", Token: "devmount-dev-token", ClientInstanceID: "win32-test-ui", LeaseSeconds: 30, MountPoint: defaultMountPoint(), VolumePrefix: "devmount", Path: "/", LocalPath: "devmount-local", HostBackend: HostBackendAuto, Offset: 0, Length: 64, MaxEntries: 32}
 }
 
 func Operations() []Operation {
@@ -62,6 +64,48 @@ func NormalizeHostBackend(value string) string {
 	}
 }
 
+func NormalizeMountPoint(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) >= 2 && isAlpha(value[0]) && value[1] == ':' {
+		drive := strings.ToUpper(value[:1]) + ":"
+		if len(value) == 2 {
+			return drive
+		}
+		if len(value) == 3 && isPathSeparator(value[2]) {
+			return drive
+		}
+	}
+	return value
+}
+
+func ValidateMountPoint(value string) error {
+	value = NormalizeMountPoint(value)
+	if value == "" {
+		return fmt.Errorf("mount point is required")
+	}
+	if len(value) == 2 && isAlpha(value[0]) && value[1] == ':' {
+		return nil
+	}
+	if isLikelyAbsoluteMountDir(value) {
+		return nil
+	}
+	return fmt.Errorf("mount point %q is invalid; expected a drive letter like X: or an absolute directory path", value)
+}
+
+func ResolveMountPointForStart(value string) (string, bool) {
+	value = NormalizeMountPoint(value)
+	if !isDriveLetterMountPoint(value) {
+		return value, false
+	}
+	if !driveRootExists(value + `\`) {
+		return value, false
+	}
+	if next := nextAvailableDriveLetter(value); next != "" && next != value {
+		return next, true
+	}
+	return value, false
+}
+
 func (c Config) Normalized() Config {
 	defaults := DefaultConfig()
 	if strings.TrimSpace(c.Addr) == "" {
@@ -79,6 +123,7 @@ func (c Config) Normalized() Config {
 	if strings.TrimSpace(c.MountPoint) == "" {
 		c.MountPoint = defaults.MountPoint
 	}
+	c.MountPoint = NormalizeMountPoint(c.MountPoint)
 	if strings.TrimSpace(c.VolumePrefix) == "" {
 		c.VolumePrefix = defaults.VolumePrefix
 	}
@@ -115,8 +160,8 @@ func (c Config) Validate(op Operation) error {
 	if c.LeaseSeconds == 0 {
 		return fmt.Errorf("lease seconds must be greater than 0")
 	}
-	if strings.TrimSpace(c.MountPoint) == "" {
-		return fmt.Errorf("mount point is required")
+	if err := ValidateMountPoint(c.MountPoint); err != nil {
+		return err
 	}
 	if strings.TrimSpace(c.VolumePrefix) == "" {
 		return fmt.Errorf("volume prefix is required")
@@ -164,4 +209,68 @@ func quoteIfNeeded(s string) string {
 	}
 	escaped := strings.ReplaceAll(s, `"`, `\\"`)
 	return `"` + escaped + `"`
+}
+
+func isAlpha(b byte) bool {
+	return (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+func isPathSeparator(b byte) bool {
+	return b == '\\' || b == '/'
+}
+
+func isLikelyAbsoluteMountDir(value string) bool {
+	if len(value) >= 3 && isAlpha(value[0]) && value[1] == ':' && isPathSeparator(value[2]) {
+		return true
+	}
+	return strings.HasPrefix(value, `\\`) || strings.HasPrefix(value, `/`)
+}
+
+var driveRootExists = func(root string) bool {
+	_, err := os.Stat(root)
+	return err == nil
+}
+
+func defaultMountPoint() string {
+	if runtime.GOOS != "windows" {
+		return "M:"
+	}
+	for _, letter := range candidateDriveLetters() {
+		root := string(letter) + `:\`
+		if !driveRootExists(root) {
+			return string(letter) + ":"
+		}
+	}
+	return "M:"
+}
+
+func candidateDriveLetters() []byte {
+	return []byte{'Z', 'Y', 'X', 'W', 'V', 'U', 'T', 'S', 'R', 'Q', 'P', 'O', 'N', 'M', 'L', 'K', 'J', 'I', 'H', 'G', 'F', 'E', 'D'}
+}
+
+func isDriveLetterMountPoint(value string) bool {
+	return len(value) == 2 && isAlpha(value[0]) && value[1] == ':'
+}
+
+func nextAvailableDriveLetter(current string) string {
+	current = NormalizeMountPoint(current)
+	letters := candidateDriveLetters()
+	start := -1
+	for i, letter := range letters {
+		if strings.EqualFold(string(letter)+":", current) {
+			start = i
+			break
+		}
+	}
+	if start == -1 {
+		return defaultMountPoint()
+	}
+	for offset := 1; offset < len(letters); offset++ {
+		letter := letters[(start+offset)%len(letters)]
+		root := string(letter) + `:\`
+		if !driveRootExists(root) {
+			return string(letter) + ":"
+		}
+	}
+	return ""
 }

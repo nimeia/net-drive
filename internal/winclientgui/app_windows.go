@@ -37,6 +37,7 @@ type app struct {
 	sentHideTip     bool
 	lastTrayPhase   winclientruntime.Phase
 	lastTrayError   string
+	lastShownError  string
 }
 
 var activeApp *app

@@ -19,10 +19,76 @@ func TestConfigNormalizedAppliesDefaultsAndLeadingSlash(t *testing.T) {
 	if cfg.HostBackend != HostBackendAuto {
 		t.Fatalf("HostBackend = %q, want auto", cfg.HostBackend)
 	}
+	if cfg.MountPoint == "" {
+		t.Fatalf("MountPoint = empty, want default drive letter")
+	}
 	if cfg.Length == 0 || cfg.MaxEntries == 0 || cfg.LeaseSeconds == 0 {
 		t.Fatalf("defaults not applied: %+v", cfg)
 	}
 }
+
+func TestDefaultMountPointPicksFirstFreeCandidate(t *testing.T) {
+	original := driveRootExists
+	driveRootExists = func(root string) bool {
+		return root == `Z:\` || root == `Y:\`
+	}
+	defer func() { driveRootExists = original }()
+
+	if got := defaultMountPoint(); got != "X:" {
+		t.Fatalf("defaultMountPoint() = %q, want X:", got)
+	}
+}
+
+func TestDefaultMountPointFallsBackWhenCandidatesBusy(t *testing.T) {
+	original := driveRootExists
+	driveRootExists = func(root string) bool { return true }
+	defer func() { driveRootExists = original }()
+
+	if got := defaultMountPoint(); got != "M:" {
+		t.Fatalf("defaultMountPoint() = %q, want M:", got)
+	}
+}
+
+func TestResolveMountPointForStartKeepsFreeDrive(t *testing.T) {
+	original := driveRootExists
+	driveRootExists = func(root string) bool { return false }
+	defer func() { driveRootExists = original }()
+
+	got, changed := ResolveMountPointForStart("M:")
+	if changed {
+		t.Fatal("ResolveMountPointForStart(M:) changed = true, want false")
+	}
+	if got != "M:" {
+		t.Fatalf("ResolveMountPointForStart(M:) = %q, want M:", got)
+	}
+}
+
+func TestResolveMountPointForStartSwitchesBusyDrive(t *testing.T) {
+	original := driveRootExists
+	driveRootExists = func(root string) bool {
+		return root == `M:\` || root == `L:\`
+	}
+	defer func() { driveRootExists = original }()
+
+	got, changed := ResolveMountPointForStart("M:")
+	if !changed {
+		t.Fatal("ResolveMountPointForStart(M:) changed = false, want true")
+	}
+	if got != "K:" {
+		t.Fatalf("ResolveMountPointForStart(M:) = %q, want K:", got)
+	}
+}
+
+func TestResolveMountPointForStartLeavesDirectoryMountPoint(t *testing.T) {
+	got, changed := ResolveMountPointForStart(`C:\mnt\devmount`)
+	if changed {
+		t.Fatal("ResolveMountPointForStart(directory) changed = true, want false")
+	}
+	if got != `C:\mnt\devmount` {
+		t.Fatalf("ResolveMountPointForStart(directory) = %q", got)
+	}
+}
+
 func TestConfigValidateRejectsUnsupportedOperation(t *testing.T) {
 	if err := DefaultConfig().Validate(Operation("unsupported")); err == nil {
 		t.Fatal("Validate unsupported operation error = nil, want error")
@@ -33,6 +99,24 @@ func TestConfigValidateAllowsMountOperation(t *testing.T) {
 		t.Fatalf("Validate mount error = %v, want nil", err)
 	}
 }
+
+func TestNormalizeMountPointCanonicalizesDriveRoots(t *testing.T) {
+	if got := NormalizeMountPoint("m:\\"); got != "M:" {
+		t.Fatalf("NormalizeMountPoint(m:\\\\) = %q, want M:", got)
+	}
+	if got := NormalizeMountPoint(" m: "); got != "M:" {
+		t.Fatalf("NormalizeMountPoint(\" m: \") = %q, want M:", got)
+	}
+}
+
+func TestConfigValidateRejectsInvalidMountPoint(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.MountPoint = "bad:mount"
+	if err := cfg.Validate(OperationMount); err == nil {
+		t.Fatal("Validate invalid mount point error = nil, want error")
+	}
+}
+
 func TestConfigValidateNormalizesRelativePathBeforeValidation(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Path = "relative/path"
@@ -53,6 +137,7 @@ func TestConfigValidateRejectsUnsupportedHostBackend(t *testing.T) {
 func TestBuildCLIPreviewIncludesOperationSpecificFlags(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Path = "/docs/My File.txt"
+	cfg.MountPoint = "m:\\"
 	cfg.Length = 128
 	cfg.MaxEntries = 9
 	cfg.LocalPath = `C:\temp\dev mount`
@@ -63,6 +148,9 @@ func TestBuildCLIPreviewIncludesOperationSpecificFlags(t *testing.T) {
 	}
 	if !strings.Contains(mountCmd, `-host-backend dispatcher-v1`) {
 		t.Fatalf("mount preview missing host backend: %s", mountCmd)
+	}
+	if !strings.Contains(mountCmd, `-mount-point M:`) {
+		t.Fatalf("mount preview missing normalized mount point: %s", mountCmd)
 	}
 	readCmd := BuildCLIPreview(cfg, OperationRead)
 	if !strings.Contains(readCmd, `-op read`) {

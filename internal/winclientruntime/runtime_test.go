@@ -3,6 +3,7 @@ package winclientruntime
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +81,21 @@ func TestRuntimeStartBuildErrorTransitionsToError(t *testing.T) {
 	}
 	if snapshot.LastError != "dial failed" {
 		t.Fatalf("LastError = %q, want dial failed", snapshot.LastError)
+	}
+}
+
+func TestRuntimeStartUnsupportedMountTransitionsToError(t *testing.T) {
+	r := New(fakeBuilder{err: errors.New("backend winfsp-native-preflight validates WinFsp availability only and does not create an Explorer-visible mount point yet")})
+	err := r.Start(winclient.DefaultConfig(), "unsupported")
+	if err == nil {
+		t.Fatal("Start error = nil, want error")
+	}
+	snapshot := r.Snapshot()
+	if snapshot.Phase != PhaseError {
+		t.Fatalf("Phase = %s, want %s", snapshot.Phase, PhaseError)
+	}
+	if !strings.Contains(snapshot.LastError, "Explorer-visible mount point") {
+		t.Fatalf("LastError = %q, want Explorer-visible mount point message", snapshot.LastError)
 	}
 }
 

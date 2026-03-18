@@ -100,6 +100,14 @@ func (a *app) startMount() {
 		_ = a.logError("mount start config error: " + err.Error())
 		return
 	}
+	if resolved, changed := winclient.ResolveMountPointForStart(cfg.MountPoint); changed {
+		original := cfg.MountPoint
+		cfg.MountPoint = resolved
+		a.setText(idMountPoint, resolved)
+		message := fmt.Sprintf("mount point %s is in use; switched to %s before start", original, resolved)
+		a.setOutput(message)
+		_ = a.logInfo(message)
+	}
 	profile := strings.TrimSpace(a.text(idProfileName))
 	if err := a.runtime.Start(cfg, profile); err != nil {
 		a.setOutput("mount start failed: " + err.Error())
@@ -167,6 +175,7 @@ func (a *app) refreshRuntimeViews() {
 	snapshot := a.runtime.Snapshot()
 	a.recoveryState, _ = a.recovery.Update(snapshot)
 	a.setHeaderStatus(snapshot)
+	a.maybeShowRuntimeError(snapshot)
 	a.setText(idDashboardSummary, windowsText(a.dashboardSummary(snapshot)))
 	a.setText(idDiagnosticsSummary, windowsText(a.diagnosticsSummary(snapshot)))
 	a.syncTray(snapshot)
@@ -174,10 +183,23 @@ func (a *app) refreshRuntimeViews() {
 func (a *app) setHeaderStatus(snapshot winclientruntime.Snapshot) {
 	status := snapshot.StatusText
 	if snapshot.LastError != "" {
-		status += " | error: " + snapshot.LastError
+		status += " | error: " + summarizeRuntimeError(snapshot.LastError)
 	}
 	a.setText(idHeaderStatus, status)
 }
+
+func (a *app) maybeShowRuntimeError(snapshot winclientruntime.Snapshot) {
+	if strings.TrimSpace(snapshot.LastError) == "" {
+		a.lastShownError = ""
+		return
+	}
+	if snapshot.LastError == a.lastShownError {
+		return
+	}
+	a.lastShownError = snapshot.LastError
+	a.setOutput("mount runtime error: " + snapshot.LastError)
+}
+
 func (a *app) dashboardSummary(snapshot winclientruntime.Snapshot) string {
 	profile := strings.TrimSpace(a.text(idProfileName))
 	if profile == "" {
@@ -237,4 +259,16 @@ func emptyOrDraft(value, fallback string) string {
 	}
 	return value
 }
+
+func summarizeRuntimeError(err string) string {
+	err = strings.TrimSpace(err)
+	if err == "" {
+		return ""
+	}
+	if strings.Contains(err, "invalid mount point syntax") {
+		return "invalid mount point; use X: or an existing absolute directory"
+	}
+	return err
+}
+
 func windowsText(text string) string { return strings.ReplaceAll(text, "\n", "\r\n") }

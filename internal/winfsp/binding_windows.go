@@ -45,12 +45,17 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 		info.PreflightError = "mount point is required"
 		return info, fmt.Errorf(info.PreflightError)
 	}
-	if err := preflightMount(dllPath, config.MountPoint); err != nil {
-		info.PreflightError = err.Error()
-		return info, err
+	if shouldSkipNativePreflight(config.MountPoint) {
+		info.PreflightOK = true
+		info.Note = "WinFsp DLL loaded. Native preflight is skipped for drive-letter mount points; syntax and occupancy are validated locally before start."
+	} else {
+		if err := preflightMount(dllPath, config.MountPoint); err != nil {
+			info.PreflightError = err.Error()
+			return info, err
+		}
+		info.PreflightOK = true
+		info.Note = "WinFsp DLL loaded and FspFileSystemPreflight succeeded for the requested mount point."
 	}
-	info.PreflightOK = true
-	info.Note = "WinFsp DLL loaded and FspFileSystemPreflight succeeded for the requested mount point."
 	switch requested {
 	case "dispatcher-v1":
 		if !info.DispatcherReady {
@@ -89,9 +94,15 @@ func findWinFspLauncher() string {
 func candidateDLLPaths() []string {
 	base := winfspInstallBases()
 	names := []string{"winfsp-x64.dll", "winfsp-x86.dll", "winfsp-a64.dll"}
-	candidates := make([]string, 0, len(base)*6+len(names))
+	pathDirs := pathEntries()
+	candidates := make([]string, 0, len(base)*6+len(pathDirs)*len(names)+len(names))
 	for _, name := range names {
 		candidates = append(candidates, name)
+	}
+	for _, dir := range pathDirs {
+		for _, name := range names {
+			candidates = append(candidates, filepath.Join(dir, name))
+		}
 	}
 	for _, root := range base {
 		for _, name := range names {
@@ -113,7 +124,13 @@ func candidateDLLPaths() []string {
 func candidateLauncherPaths() []string {
 	base := winfspInstallBases()
 	names := []string{"launchctl-x64.exe", "launchctl-x86.exe", "launchctl-a64.exe", "launchctl.exe"}
-	candidates := make([]string, 0, len(base)*4)
+	pathDirs := pathEntries()
+	candidates := make([]string, 0, len(base)*4+len(pathDirs)*len(names))
+	for _, dir := range pathDirs {
+		for _, name := range names {
+			candidates = append(candidates, filepath.Join(dir, name))
+		}
+	}
 	for _, root := range base {
 		for _, name := range names {
 			candidates = append(candidates, filepath.Join(root, "bin", name))
@@ -139,6 +156,10 @@ func winfspInstallBases() []string {
 		}
 	}
 	return dedupeNonEmpty(roots)
+}
+
+func pathEntries() []string {
+	return dedupeNonEmpty(filepath.SplitList(os.Getenv("PATH")))
 }
 
 func dedupeNonEmpty(values []string) []string {
@@ -182,7 +203,21 @@ func preflightMount(dllPath, mountPoint string) error {
 	}
 	status, _, _ := proc.Call(uintptr(unsafe.Pointer(devicePath)), uintptr(unsafe.Pointer(mountPtr)))
 	if NTStatus(status) != StatusSuccess {
-		return fmt.Errorf("FspFileSystemPreflight(%s) failed with ntstatus=0x%08x", mountPoint, uint32(status))
+		return fmt.Errorf("FspFileSystemPreflight(%s) failed with ntstatus=0x%08x%s", mountPoint, uint32(status), ntStatusHint(NTStatus(status), mountPoint))
 	}
 	return nil
+}
+
+func ntStatusHint(status NTStatus, mountPoint string) string {
+	switch uint32(status) {
+	case 0xc0000033:
+		return fmt.Sprintf(" (WinFsp rejected mount point %q with STATUS_OBJECT_NAME_INVALID)", mountPoint)
+	default:
+		return ""
+	}
+}
+
+func shouldSkipNativePreflight(mountPoint string) bool {
+	mountPoint = strings.TrimSpace(mountPoint)
+	return len(mountPoint) == 2 && ((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) && mountPoint[1] == ':'
 }

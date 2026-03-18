@@ -56,4 +56,16 @@ func (b BindingInfo) Summary() string {
 	}
 	return fmt.Sprintf("%s (%s)", backend, strings.Join(parts, "; "))
 }
+
+func (b BindingInfo) MountRuntimeSupportError() error {
+	switch b.EffectiveBackend {
+	case "winfsp-native-preflight":
+		return fmt.Errorf("backend %s validates WinFsp availability only and does not create an Explorer-visible mount point yet", b.EffectiveBackend)
+	case "winfsp-dispatcher-v1":
+		return fmt.Errorf("backend %s is still a scaffold and does not register an Explorer-visible WinFsp filesystem yet", b.EffectiveBackend)
+	default:
+		return nil
+	}
+}
+
 func Probe(config HostConfig) (BindingInfo, error) { return probeBinding(config) }

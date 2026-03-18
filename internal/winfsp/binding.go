@@ -6,22 +6,24 @@ import (
 )
 
 type BindingInfo struct {
-	RequestedBackend     string
-	Backend              string
-	EffectiveBackend     string
-	Available            bool
-	DLLPath              string
-	LauncherPath         string
-	MountPoint           string
-	PreflightOK          bool
-	PreflightError       string
-	DispatcherReady      bool
-	DispatcherStatus     string
-	CallbackBridgeReady  bool
-	CallbackBridgeStatus string
-	ServiceLoopReady     bool
-	ServiceLoopStatus    string
-	Note                 string
+	RequestedBackend      string
+	Backend               string
+	EffectiveBackend      string
+	Available             bool
+	DLLPath               string
+	LauncherPath          string
+	MountPoint            string
+	PreflightOK           bool
+	PreflightError        string
+	DispatcherReady       bool
+	DispatcherStatus      string
+	CallbackBridgeReady   bool
+	CallbackBridgeStatus  string
+	ServiceLoopReady      bool
+	ServiceLoopStatus     string
+	NativeCallbackSummary string
+	ExplorerRequestMatrix string
+	Note                  string
 }
 
 func (b BindingInfo) Summary() string {

@@ -64,6 +64,7 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 	default:
 		return info, fmt.Errorf("unsupported host backend %q", requested)
 	}
+	info = populateBindingDerived(info, nil, nil, nil)
 	return info, nil
 }
 

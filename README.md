@@ -195,6 +195,8 @@ go run ./cmd/devmount-client
 
 Iter 27 ABI bridge / dispatcher service loop v1: `docs/architecture/windows-winfsp-abi-bridge-v1.md`
 Iter 28 Explorer smoke / installer / crash recovery: `docs/architecture/windows-windows-host-smoke-installer-recovery.md`
+Iter 29 native callback table / Explorer request matrix: `docs/architecture/windows-winfsp-native-callback-table.md`
+Iter 30 MSI/EXE packaging + Windows host validation: `docs/architecture/windows-installer-msi-exe-validation.md`
 
 Windows installer stage:
 
@@ -203,4 +205,13 @@ Windows installer stage:
 ./scripts/package-windows-installer.ps1
 ```
 
-Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, and `recovery.json`.
+Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, and `recovery.json`.
+
+
+Windows release packaging:
+
+```powershell
+./scripts/package-windows-release.ps1 -Version 0.1.0
+```
+
+This produces an EXE staging bundle, a WiX-based MSI source/output directory, and a release validation checklist that references the native callback table plus Explorer request matrix.

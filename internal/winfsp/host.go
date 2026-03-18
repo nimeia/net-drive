@@ -35,32 +35,25 @@ func (h *Host) DispatcherBridge() *DispatcherBridge   { return h.dispatcher }
 func (h *Host) DispatcherABI() *DispatcherABI         { return h.abi }
 func (h *Host) DispatcherService() *DispatcherService { return h.service }
 func (h *Host) Binding() BindingInfo {
-	binding := h.binding
-	if h.dispatcher != nil && binding.EffectiveBackend == "winfsp-dispatcher-v1" {
-		if binding.DispatcherStatus == "" {
-			binding.DispatcherStatus = h.dispatcher.Snapshot().Summary()
-		}
-		if h.abi != nil && binding.CallbackBridgeStatus == "" {
-			binding.CallbackBridgeStatus = h.abi.Snapshot().Summary()
-		}
-		if h.service != nil && binding.ServiceLoopStatus == "" {
-			binding.ServiceLoopStatus = h.service.Snapshot().Summary()
-		}
-	}
-	return binding
+	return populateBindingDerived(h.binding, h.dispatcher, h.abi, h.service)
 }
 func (h *Host) SetBinding(binding BindingInfo) {
-	if h.dispatcher != nil && binding.EffectiveBackend == "winfsp-dispatcher-v1" {
+	h.binding = populateBindingDerived(binding, h.dispatcher, h.abi, h.service)
+}
+
+func populateBindingDerived(binding BindingInfo, dispatcher *DispatcherBridge, abi *DispatcherABI, service *DispatcherService) BindingInfo {
+	if dispatcher != nil && binding.EffectiveBackend == "winfsp-dispatcher-v1" {
 		if binding.DispatcherStatus == "" {
-			binding.DispatcherStatus = h.dispatcher.Snapshot().Summary()
+			binding.DispatcherStatus = dispatcher.Snapshot().Summary()
 		}
-		if h.abi != nil && binding.CallbackBridgeStatus == "" {
-			binding.CallbackBridgeStatus = h.abi.Snapshot().Summary()
+		if abi != nil && binding.CallbackBridgeStatus == "" {
+			binding.CallbackBridgeStatus = abi.Snapshot().Summary()
 		}
-		if h.service != nil && binding.ServiceLoopStatus == "" {
-			binding.ServiceLoopStatus = h.service.Snapshot().Summary()
+		if service != nil && binding.ServiceLoopStatus == "" {
+			binding.ServiceLoopStatus = service.Snapshot().Summary()
 		}
 	}
-	h.binding = binding
+	binding.NativeCallbackSummary = DefaultNativeCallbackTable(binding).Summary()
+	return binding
 }
 func (h *Host) Run(ctx context.Context) error { return runHost(ctx, h) }

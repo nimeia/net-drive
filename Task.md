@@ -236,3 +236,19 @@
 - [x] 新增 scripts/package-windows-installer.ps1，形成 Windows 安装链路 stage
 - [x] Dashboard / Diagnostics 展示 recovery 状态
 - [x] 更新 README 与 Iter 28 文档说明
+
+
+## Iter 29 — 完整 WinFsp native callback table / Explorer 请求矩阵收口
+- [x] 新增 WinFsp native callback table 摘要、Markdown/JSON 导出与单测
+- [x] 新增 Explorer request matrix 摘要、Markdown/JSON 导出与单测
+- [x] Diagnostics / 导出包接入 native callback table 与 request matrix
+- [x] Dashboard / Diagnostics 文案更新为 callback coverage + request matrix
+- [x] 更新 README 与 Iter 29 设计文档
+
+## Iter 30 — MSI/EXE 安装包正式链路 + Windows 主机联合验证
+- [x] 新增 MSI 打包脚本（WiX source/output）
+- [x] 新增 EXE/portable bundle 打包脚本
+- [x] 新增统一 Windows release packaging 脚本
+- [x] 新增 release manifest / validation checklist 生成逻辑与单测
+- [x] 新增 Windows 主机联合验证文档与发布校验清单
+- [x] 更新 README 与安装链路说明

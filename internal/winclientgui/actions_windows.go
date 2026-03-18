@@ -228,7 +228,7 @@ func (a *app) diagnosticsSummary(snapshot winclientruntime.Snapshot) string {
 	} else if opErr != nil {
 		lines = append(lines, "Selected operation error: "+opErr.Error())
 	}
-	lines = append(lines, "", "Use Run Self-Check to validate the current profile and host binding.", "Use Export Diagnostics to generate a zip with report.txt/report.json/log-tail.txt/explorer-smoke.md/recovery.json.")
+	lines = append(lines, "", "Use Run Self-Check to validate the current profile, native callback table, and Explorer request matrix.", "Use Export Diagnostics to generate a zip with report.txt/report.json/log-tail.txt/explorer-smoke.md/explorer-request-matrix.md/winfsp-native-callbacks.md/recovery.json.")
 	return strings.Join(lines, "\n")
 }
 func emptyOrDraft(value, fallback string) string {

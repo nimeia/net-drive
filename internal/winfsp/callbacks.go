@@ -58,6 +58,12 @@ func (c *Callbacks) GetFileInfo(path string) (FileInfo, NTStatus) {
 	}
 	return info, StatusSuccess
 }
+func (c *Callbacks) Create(path string, isDirectory bool) NTStatus {
+	if path == "" {
+		return StatusObjectPathNotFound
+	}
+	return StatusAccessDenied
+}
 func (c *Callbacks) Open(path string) (OpenResult, NTStatus) {
 	result, err := c.adapter.Open(path)
 	if err != nil {
@@ -74,6 +80,12 @@ func (c *Callbacks) OpenDirectory(path string) (OpenResult, NTStatus) {
 	c.trackHandle(result.HandleID, result.Info)
 	return OpenResult{HandleID: result.HandleID, Info: result.Info}, StatusSuccess
 }
+func (c *Callbacks) Overwrite(handleID uint64, allocationSize uint64, fileAttributes uint32, replaceFileAttributes bool) NTStatus {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return StatusInvalidHandle
+	}
+	return StatusAccessDenied
+}
 func (c *Callbacks) ReadDirectory(handleID uint64, cookie uint64, maxEntries uint32) (DirectoryPage, NTStatus) {
 	page, err := c.adapter.ReadDirectory(handleID, cookie, maxEntries)
 	if err != nil {
@@ -87,6 +99,12 @@ func (c *Callbacks) Read(handleID uint64, offset int64, length uint32) ([]byte, 
 		return nil, false, mapError(err)
 	}
 	return result.Data, result.EOF, StatusSuccess
+}
+func (c *Callbacks) Write(handleID uint64, offset int64, data []byte, constrainedIo bool) (uint32, NTStatus) {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return 0, StatusInvalidHandle
+	}
+	return 0, StatusAccessDenied
 }
 func (c *Callbacks) Cleanup(handleID uint64) NTStatus {
 	state, ok := c.lookupHandle(handleID)
@@ -106,6 +124,40 @@ func (c *Callbacks) Flush(handleID uint64) NTStatus {
 	c.updateHandle(handleID, state)
 	return StatusSuccess
 }
+func (c *Callbacks) GetFileInfoByHandle(handleID uint64) (FileInfo, NTStatus) {
+	state, ok := c.lookupHandle(handleID)
+	if !ok {
+		return FileInfo{}, StatusInvalidHandle
+	}
+	return state.Info, StatusSuccess
+}
+func (c *Callbacks) SetBasicInfo(handleID uint64, fileAttributes uint32) NTStatus {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return StatusInvalidHandle
+	}
+	return StatusAccessDenied
+}
+func (c *Callbacks) SetFileSize(handleID uint64, newSize int64, setAllocationSize bool) NTStatus {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return StatusInvalidHandle
+	}
+	return StatusAccessDenied
+}
+func (c *Callbacks) CanDelete(path string) NTStatus {
+	if _, status := c.GetFileInfo(path); status != StatusSuccess {
+		return status
+	}
+	return StatusAccessDenied
+}
+func (c *Callbacks) Rename(handleID uint64, newPath string, replaceIfExists bool) NTStatus {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return StatusInvalidHandle
+	}
+	if newPath == "" {
+		return StatusObjectPathNotFound
+	}
+	return StatusAccessDenied
+}
 func (c *Callbacks) GetSecurityByName(path string) (SecurityInfo, NTStatus) {
 	info, status := c.GetFileInfo(path)
 	if status != StatusSuccess {
@@ -121,9 +173,9 @@ func (c *Callbacks) GetSecurity(handleID uint64) (SecurityInfo, NTStatus) {
 	descriptor := DefaultNativeSecurityDescriptor(state.Info, SecurityDescriptorOptions{HandleBound: true, DeleteOnClose: state.DeleteOnClose, Cleaned: state.Cleaned, Flushed: state.Flushed, Source: SecuritySourceByHandle})
 	return securityInfoFromDescriptor(descriptor), StatusSuccess
 }
-func (c *Callbacks) CanDelete(path string) NTStatus {
-	if _, status := c.GetFileInfo(path); status != StatusSuccess {
-		return status
+func (c *Callbacks) SetSecurity(handleID uint64, securityDescriptor string) NTStatus {
+	if _, ok := c.lookupHandle(handleID); !ok {
+		return StatusInvalidHandle
 	}
 	return StatusAccessDenied
 }

@@ -75,6 +75,11 @@ func (b *DispatcherBridge) GetFileInfo(path string) (FileInfo, NTStatus) {
 	b.record("GetFileInfo", status, path)
 	return info, status
 }
+func (b *DispatcherBridge) Create(path string, isDirectory bool) NTStatus {
+	status := b.callbacks.Create(path, isDirectory)
+	b.record("Create", status, fmt.Sprintf("%s dir=%v", path, isDirectory))
+	return status
+}
 func (b *DispatcherBridge) Open(path string) (OpenResult, NTStatus) {
 	result, status := b.callbacks.Open(path)
 	b.record("Open", status, path)
@@ -90,10 +95,20 @@ func (b *DispatcherBridge) ReadDirectory(handleID uint64, cookie uint64, maxEntr
 	b.record("ReadDirectory", status, fmt.Sprintf("handle=%d cookie=%d max=%d", handleID, cookie, maxEntries))
 	return page, status
 }
+func (b *DispatcherBridge) Overwrite(handleID uint64, allocationSize uint64, fileAttributes uint32, replaceFileAttributes bool) NTStatus {
+	status := b.callbacks.Overwrite(handleID, allocationSize, fileAttributes, replaceFileAttributes)
+	b.record("Overwrite", status, fmt.Sprintf("handle=%d allocation=%d attrs=%d replace=%v", handleID, allocationSize, fileAttributes, replaceFileAttributes))
+	return status
+}
 func (b *DispatcherBridge) Read(handleID uint64, offset int64, length uint32) ([]byte, bool, NTStatus) {
 	data, eof, status := b.callbacks.Read(handleID, offset, length)
 	b.record("Read", status, fmt.Sprintf("handle=%d offset=%d length=%d eof=%v", handleID, offset, length, eof))
 	return data, eof, status
+}
+func (b *DispatcherBridge) Write(handleID uint64, offset int64, data []byte, constrainedIo bool) (uint32, NTStatus) {
+	written, status := b.callbacks.Write(handleID, offset, data, constrainedIo)
+	b.record("Write", status, fmt.Sprintf("handle=%d offset=%d bytes=%d constrained=%v", handleID, offset, len(data), constrainedIo))
+	return written, status
 }
 func (b *DispatcherBridge) Cleanup(handleID uint64) NTStatus {
 	status := b.callbacks.Cleanup(handleID)
@@ -103,6 +118,21 @@ func (b *DispatcherBridge) Cleanup(handleID uint64) NTStatus {
 func (b *DispatcherBridge) Flush(handleID uint64) NTStatus {
 	status := b.callbacks.Flush(handleID)
 	b.record("Flush", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (b *DispatcherBridge) GetFileInfoByHandle(handleID uint64) (FileInfo, NTStatus) {
+	info, status := b.callbacks.GetFileInfoByHandle(handleID)
+	b.record("GetFileInfoByHandle", status, fmt.Sprintf("handle=%d", handleID))
+	return info, status
+}
+func (b *DispatcherBridge) SetBasicInfo(handleID uint64, fileAttributes uint32) NTStatus {
+	status := b.callbacks.SetBasicInfo(handleID, fileAttributes)
+	b.record("SetBasicInfo", status, fmt.Sprintf("handle=%d attrs=%d", handleID, fileAttributes))
+	return status
+}
+func (b *DispatcherBridge) SetFileSize(handleID uint64, newSize int64, setAllocationSize bool) NTStatus {
+	status := b.callbacks.SetFileSize(handleID, newSize, setAllocationSize)
+	b.record("SetFileSize", status, fmt.Sprintf("handle=%d size=%d alloc=%v", handleID, newSize, setAllocationSize))
 	return status
 }
 func (b *DispatcherBridge) GetSecurityByName(path string) (SecurityInfo, NTStatus) {
@@ -120,9 +150,19 @@ func (b *DispatcherBridge) CanDelete(path string) NTStatus {
 	b.record("CanDelete", status, path)
 	return status
 }
+func (b *DispatcherBridge) SetSecurity(handleID uint64, securityDescriptor string) NTStatus {
+	status := b.callbacks.SetSecurity(handleID, securityDescriptor)
+	b.record("SetSecurity", status, fmt.Sprintf("handle=%d descriptor=%d", handleID, len(securityDescriptor)))
+	return status
+}
 func (b *DispatcherBridge) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
 	status := b.callbacks.SetDeleteOnClose(handleID, enabled)
 	b.record("SetDeleteOnClose", status, fmt.Sprintf("handle=%d enabled=%v", handleID, enabled))
+	return status
+}
+func (b *DispatcherBridge) Rename(handleID uint64, newPath string, replaceIfExists bool) NTStatus {
+	status := b.callbacks.Rename(handleID, newPath, replaceIfExists)
+	b.record("Rename", status, fmt.Sprintf("handle=%d path=%s replace=%v", handleID, newPath, replaceIfExists))
 	return status
 }
 func (b *DispatcherBridge) Close(handleID uint64) NTStatus {

@@ -101,3 +101,33 @@ Version: $Version
 
 Copy-Item (Join-Path $release "windows-host-validation-template.json") (Join-Path $release "windows-host-validation-result-template.json") -Force
 Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path $release "windows-host-validation-result-template.md") -Force
+
+@"
+# Windows Release Closure Template
+
+Version: $Version
+State: NOT-READY
+
+## Outstanding items
+- [ ] Backfill windows-host-validation-result-template.json
+- [ ] MSI install passed
+- [ ] MSI upgrade passed
+- [ ] MSI uninstall passed
+- [ ] EXE portable launch passed
+- [ ] Validation marked completed
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.md")
+
+@"
+{
+  "version": "$Version",
+  "release_ready": false,
+  "reasons": [
+    "validation record still contains not-run checks",
+    "installer run msi/install has not passed",
+    "installer run msi/upgrade has not passed",
+    "installer run msi/uninstall has not passed",
+    "installer run exe/portable-launch has not passed",
+    "validation record is not marked completed"
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.json")

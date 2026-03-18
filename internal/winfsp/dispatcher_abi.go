@@ -88,6 +88,11 @@ func (a *DispatcherABI) Initialize(rootPath string) error {
 	a.mu.Unlock()
 	return nil
 }
+func (a *DispatcherABI) Create(path string, isDirectory bool) NTStatus {
+	status := a.bridge.Create(path, isDirectory)
+	a.record("Create", status, path)
+	return status
+}
 func (a *DispatcherABI) GetVolumeInfo() (ABIVolumeInfo, NTStatus) {
 	info, status := a.bridge.GetVolumeInfo()
 	a.record("GetVolumeInfo", status, "")
@@ -117,10 +122,20 @@ func (a *DispatcherABI) ReadDirectory(handleID, cookie uint64, maxEntries uint32
 	}
 	return entries, page.NextCookie, page.EOF, status
 }
+func (a *DispatcherABI) Overwrite(handleID uint64, allocationSize uint64, fileAttributes uint32, replaceFileAttributes bool) NTStatus {
+	status := a.bridge.Overwrite(handleID, allocationSize, fileAttributes, replaceFileAttributes)
+	a.record("Overwrite", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
 func (a *DispatcherABI) Read(handleID uint64, offset int64, length uint32) ([]byte, bool, NTStatus) {
 	data, eof, status := a.bridge.Read(handleID, offset, length)
 	a.record("Read", status, fmt.Sprintf("handle=%d offset=%d length=%d eof=%v", handleID, offset, length, eof))
 	return data, eof, status
+}
+func (a *DispatcherABI) Write(handleID uint64, offset int64, data []byte, constrainedIo bool) (uint32, NTStatus) {
+	written, status := a.bridge.Write(handleID, offset, data, constrainedIo)
+	a.record("Write", status, fmt.Sprintf("handle=%d offset=%d bytes=%d", handleID, offset, len(data)))
+	return written, status
 }
 func (a *DispatcherABI) Cleanup(handleID uint64) NTStatus {
 	status := a.bridge.Cleanup(handleID)
@@ -130,6 +145,21 @@ func (a *DispatcherABI) Cleanup(handleID uint64) NTStatus {
 func (a *DispatcherABI) Flush(handleID uint64) NTStatus {
 	status := a.bridge.Flush(handleID)
 	a.record("Flush", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (a *DispatcherABI) GetFileInfoByHandle(handleID uint64) (ABIFileInfo, NTStatus) {
+	info, status := a.bridge.GetFileInfoByHandle(handleID)
+	a.record("GetFileInfoByHandle", status, fmt.Sprintf("handle=%d", handleID))
+	return ABIFileInfo{Path: info.Path, NodeID: info.NodeID, Size: info.Size, Mode: info.Mode, IsDirectory: info.IsDirectory}, status
+}
+func (a *DispatcherABI) SetBasicInfo(handleID uint64, fileAttributes uint32) NTStatus {
+	status := a.bridge.SetBasicInfo(handleID, fileAttributes)
+	a.record("SetBasicInfo", status, fmt.Sprintf("handle=%d attrs=%d", handleID, fileAttributes))
+	return status
+}
+func (a *DispatcherABI) SetFileSize(handleID uint64, newSize int64, setAllocationSize bool) NTStatus {
+	status := a.bridge.SetFileSize(handleID, newSize, setAllocationSize)
+	a.record("SetFileSize", status, fmt.Sprintf("handle=%d size=%d alloc=%v", handleID, newSize, setAllocationSize))
 	return status
 }
 func (a *DispatcherABI) GetSecurityByName(path string) (ABISecurityInfo, NTStatus) {
@@ -147,9 +177,19 @@ func (a *DispatcherABI) CanDelete(path string) NTStatus {
 	a.record("CanDelete", status, path)
 	return status
 }
+func (a *DispatcherABI) SetSecurity(handleID uint64, securityDescriptor string) NTStatus {
+	status := a.bridge.SetSecurity(handleID, securityDescriptor)
+	a.record("SetSecurity", status, fmt.Sprintf("handle=%d descriptor=%d", handleID, len(securityDescriptor)))
+	return status
+}
 func (a *DispatcherABI) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
 	status := a.bridge.SetDeleteOnClose(handleID, enabled)
 	a.record("SetDeleteOnClose", status, fmt.Sprintf("handle=%d enabled=%v", handleID, enabled))
+	return status
+}
+func (a *DispatcherABI) Rename(handleID uint64, newPath string, replaceIfExists bool) NTStatus {
+	status := a.bridge.Rename(handleID, newPath, replaceIfExists)
+	a.record("Rename", status, fmt.Sprintf("handle=%d path=%s replace=%v", handleID, newPath, replaceIfExists))
 	return status
 }
 func (a *DispatcherABI) Close(handleID uint64) NTStatus {

@@ -1,27 +1,28 @@
 package winclientsmoke
 
 import (
-	"testing"
-
 	"developer-mount/internal/winfsp"
+	"testing"
 )
 
-func TestDefaultExplorerRequestMatrixIncludesDeleteDenied(t *testing.T) {
+func TestDefaultExplorerRequestMatrixIncludesReadOnlyMutationScenarios(t *testing.T) {
 	table := winfsp.DefaultNativeCallbackTable(winfsp.BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1", DispatcherReady: true, CallbackBridgeReady: true, ServiceLoopReady: true})
 	matrix := DefaultExplorerRequestMatrix(table)
-	found := false
+	need := map[string]bool{"explorer-create-denied": false, "explorer-write-denied": false, "explorer-rename-denied": false, "explorer-delete-denied": false}
 	for _, entry := range matrix.Entries {
-		if entry.ScenarioID == "explorer-delete-denied" {
-			found = true
-			if entry.Status != RequestStatusBlocked && entry.Callback != "Cleanup" {
-				t.Fatalf("delete-denied entry = %+v, want blocked for read-only callbacks", entry)
+		if _, ok := need[entry.ScenarioID]; ok {
+			need[entry.ScenarioID] = true
+			if entry.Status == RequestStatusGap {
+				t.Fatalf("scenario %s unexpectedly gap", entry.ScenarioID)
 			}
 		}
 	}
-	if !found {
-		t.Fatal("explorer-delete-denied scenario not found in request matrix")
+	for id, found := range need {
+		if !found {
+			t.Fatalf("scenario %s missing", id)
+		}
 	}
-	if matrix.Blocked == 0 {
-		t.Fatalf("matrix.Blocked = %d, want > 0", matrix.Blocked)
+	if !matrix.Finalized || matrix.Blocked == 0 {
+		t.Fatalf("unexpected matrix: %+v", matrix)
 	}
 }

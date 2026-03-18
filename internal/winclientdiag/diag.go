@@ -374,6 +374,18 @@ func Export(path string, report Report) (string, error) {
 	if err := writeZipEntry(zw, "windows-host-validation-result-template.json", append(validationPayload, '\n')); err != nil {
 		return "", err
 	}
+	manifest := winclientrelease.NewManifest("", nil, report.CallbackTable, report.ExplorerMatrix, report.SmokeScenarios)
+	closure := winclientrelease.NewReleaseClosure(manifest, validation)
+	if err := writeZipEntry(zw, "windows-release-closure-template.md", []byte(closure.Markdown())); err != nil {
+		return "", err
+	}
+	closurePayload, err := closure.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-release-closure-template.json", append(closurePayload, '\n')); err != nil {
+		return "", err
+	}
 	if err := zw.Close(); err != nil {
 		return "", fmt.Errorf("close diagnostics zip: %w", err)
 	}

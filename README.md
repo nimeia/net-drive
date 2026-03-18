@@ -218,3 +218,13 @@ This produces an EXE staging bundle, a WiX-based MSI source/output directory, a 
 
 - Iter 33 WinFsp native security descriptor / cleanup / delete-on-close semantics: `docs/architecture/windows-winfsp-native-security-delete-semantics.md`
 - Iter 34 Windows host validation backfill / installer closure: `docs/architecture/windows-host-validation-backfill-installer-closure.md`
+
+
+Finalize Windows release closure after backfilling the host validation result:
+
+```powershell
+./scripts/finalize-windows-release.ps1 -CompletedBy "<tester>"
+```
+
+- Iter 35 WinFsp native callback matrix final closure: `docs/architecture/windows-winfsp-native-callback-matrix-final.md`
+- Iter 36 Windows release final closure: `docs/architecture/windows-release-final-closure.md`

@@ -46,3 +46,6 @@ Write-Host "Prepared Windows installer stage at $stage"
 "@ | Set-Content -Encoding UTF8 (Join-Path $stage "windows-installer-results-template.md")
 
 Copy-Item (Join-Path $stage "windows-installer-results-template.md") (Join-Path $stage "windows-host-validation-result-template.md") -Force
+
+Copy-Item (Join-Path $root "dist\windows-release\windows-release-closure-template.md") (Join-Path $stage "windows-release-closure-template.md") -Force -ErrorAction SilentlyContinue
+Copy-Item (Join-Path $root "dist\windows-release\windows-release-closure-template.json") (Join-Path $stage "windows-release-closure-template.json") -Force -ErrorAction SilentlyContinue

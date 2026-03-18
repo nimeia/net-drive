@@ -280,3 +280,18 @@
 - [x] release manifest 增加 validation template / installer result slots
 - [x] Windows host validation 模板覆盖 MSI install/upgrade/uninstall 与 EXE portable launch
 - [x] 更新 README 与 Iter 34 文档说明
+
+
+## Iter 35 — 完整 WinFsp native callback 实装矩阵最后收口
+- [x] 为 Create / Write / SetBasicInfo / SetFileSize / SetSecurity / Rename / Overwrite 增加显式只读拒绝回调
+- [x] 把上述回调贯通到 callbacks / dispatcher bridge / ABI / service warmup
+- [x] native callback table 与 Explorer request matrix 收口为 finalized=true、gap=0 的最后一版矩阵
+- [x] Explorer smoke 增加 create-denied / write-denied / rename-denied 场景
+- [x] 为 callback matrix 最后一版收口补跨平台单测
+
+## Iter 36 — Windows 主机实机结果回填 + 发布链路最终收口
+- [x] 新增 ReleaseClosure，汇总 release manifest + validation result 并计算 release_ready
+- [x] diagnostics ZIP 增加 windows-release-closure-template.*
+- [x] 发布脚本增加 windows-release-closure-template.* 产物
+- [x] 新增 finalize-windows-release.ps1，用于基于回填结果生成最终 release closure
+- [x] 更新 README 与 Iter 36 文档说明

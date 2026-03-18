@@ -25,10 +25,11 @@ type RequestMatrixEntry struct {
 }
 
 type RequestMatrix struct {
-	Ready   int                  `json:"ready"`
-	Gaps    int                  `json:"gaps"`
-	Blocked int                  `json:"blocked"`
-	Entries []RequestMatrixEntry `json:"entries"`
+	Ready     int                  `json:"ready"`
+	Gaps      int                  `json:"gaps"`
+	Blocked   int                  `json:"blocked"`
+	Finalized bool                 `json:"finalized"`
+	Entries   []RequestMatrixEntry `json:"entries"`
 }
 
 func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatrix {
@@ -64,6 +65,15 @@ func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatri
 	add("explorer-properties", "Query security by name", "GetSecurityByName")
 	add("explorer-properties", "Query security on open handle", "GetSecurity")
 	add("explorer-security-query", "Read root security by name", "GetSecurityByName")
+	add("explorer-create-denied", "Create a new file from Explorer", "Create")
+	add("explorer-write-denied", "Open writable target", "Open")
+	add("explorer-write-denied", "Attempt direct write", "Write")
+	add("explorer-write-denied", "Attempt file resize", "SetFileSize")
+	add("explorer-write-denied", "Attempt basic info mutation", "SetBasicInfo")
+	add("explorer-write-denied", "Attempt security mutation", "SetSecurity")
+	add("explorer-write-denied", "Attempt overwrite/supersede", "Overwrite")
+	add("explorer-rename-denied", "Open rename target", "Open")
+	add("explorer-rename-denied", "Attempt Explorer rename", "Rename")
 	add("explorer-delete-denied", "Probe delete permission", "CanDelete")
 	add("explorer-delete-denied", "Attempt delete-on-close on open handle", "SetDeleteOnClose")
 	add("explorer-delete-denied", "Cleanup denied delete handle", "Cleanup")
@@ -80,15 +90,13 @@ func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatri
 			m.Ready++
 		}
 	}
+	m.Finalized = m.Gaps == 0
 	return m
 }
-
 func (m RequestMatrix) Summary() string {
-	return fmt.Sprintf("entries=%d ready=%d blocked=%d gaps=%d", len(m.Entries), m.Ready, m.Blocked, m.Gaps)
+	return fmt.Sprintf("entries=%d ready=%d blocked=%d gaps=%d finalized=%v", len(m.Entries), m.Ready, m.Blocked, m.Gaps, m.Finalized)
 }
-
 func (m RequestMatrix) JSON() ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
-
 func (m RequestMatrix) Markdown() string {
 	var b strings.Builder
 	b.WriteString("# Explorer Request Matrix\n\n")

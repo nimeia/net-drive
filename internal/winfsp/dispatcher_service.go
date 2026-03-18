@@ -78,10 +78,17 @@ func (s *DispatcherService) Start(rootPath string) error {
 	}
 	_ = s.abi.CanDelete(rootPath)
 	if handleID, _, status := s.abi.Open("/README.md"); status == StatusSuccess {
+		_, _ = s.abi.Write(handleID, 0, []byte("x"), false)
+		_ = s.abi.SetBasicInfo(handleID, 0)
+		_ = s.abi.SetFileSize(handleID, 0, false)
+		_ = s.abi.SetSecurity(handleID, "O:BAG:BAD:(A;;GR;;;WD)")
+		_ = s.abi.Rename(handleID, "/README-renamed.md", false)
+		_ = s.abi.Overwrite(handleID, 0, 0, false)
 		_ = s.abi.SetDeleteOnClose(handleID, true)
 		_ = s.abi.Cleanup(handleID)
 		_ = s.abi.Close(handleID)
 	}
+	_ = s.abi.Create("/blocked-create.txt", false)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Created = true

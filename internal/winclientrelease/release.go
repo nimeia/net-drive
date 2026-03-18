@@ -22,12 +22,15 @@ type Manifest struct {
 	NativeCallbackSummary string                    `json:"native_callback_summary"`
 	ExplorerMatrixSummary string                    `json:"explorer_matrix_summary"`
 	ValidationTemplate    string                    `json:"validation_template,omitempty"`
+	ValidationResult      string                    `json:"validation_result,omitempty"`
+	ReleaseClosure        string                    `json:"release_closure,omitempty"`
+	FinalStatus           string                    `json:"final_status,omitempty"`
 	InstallerResults      []string                  `json:"installer_results,omitempty"`
 	SmokeScenarios        []winclientsmoke.Scenario `json:"smoke_scenarios,omitempty"`
 }
 
 func NewManifest(version string, artifacts []Artifact, table winfsp.NativeCallbackTable, matrix winclientsmoke.RequestMatrix, smoke []winclientsmoke.Scenario) Manifest {
-	return Manifest{PackageName: "developer-mount-windows-client", Version: strings.TrimSpace(version), Artifacts: artifacts, NativeCallbackSummary: table.Summary(), ExplorerMatrixSummary: matrix.Summary(), ValidationTemplate: "windows-host-validation-template.json", InstallerResults: []string{"msi-install", "msi-upgrade", "msi-uninstall", "exe-portable-launch"}, SmokeScenarios: smoke}
+	return Manifest{PackageName: "developer-mount-windows-client", Version: strings.TrimSpace(version), Artifacts: artifacts, NativeCallbackSummary: table.Summary(), ExplorerMatrixSummary: matrix.Summary(), ValidationTemplate: "windows-host-validation-template.json", ValidationResult: "windows-host-validation-result-template.json", ReleaseClosure: "windows-release-closure-template.json", FinalStatus: "needs-validation", InstallerResults: []string{"msi-install", "msi-upgrade", "msi-uninstall", "exe-portable-launch"}, SmokeScenarios: smoke}
 }
 func (m Manifest) JSON() ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
 func (m Manifest) MarkdownChecklist() string {
@@ -47,7 +50,8 @@ func (m Manifest) MarkdownChecklist() string {
 	b.WriteString("- Confirm the native callback table and Explorer request matrix have no unexpected hot-path gaps.\n")
 	b.WriteString("- Run the Windows Explorer smoke checklist on a Windows host.\n")
 	b.WriteString("- Export diagnostics after smoke and archive the bundle with installer artifacts.\n")
-	b.WriteString("- Backfill windows-host-validation-template.json with MSI install/upgrade/uninstall plus EXE launch results.\n")
+	b.WriteString("- Backfill windows-host-validation-result-template.json with MSI install/upgrade/uninstall plus EXE launch results.\n")
+	b.WriteString("- Regenerate windows-release-closure-template.json/.md after all real Windows host checks pass.\n")
 	return b.String()
 }
 func defaultValue(v, fallback string) string {

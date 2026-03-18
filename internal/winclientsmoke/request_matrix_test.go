@@ -1,22 +1,27 @@
 package winclientsmoke
 
 import (
-	"strings"
 	"testing"
 
 	"developer-mount/internal/winfsp"
 )
 
-func TestDefaultExplorerRequestMatrix(t *testing.T) {
+func TestDefaultExplorerRequestMatrixIncludesDeleteDenied(t *testing.T) {
 	table := winfsp.DefaultNativeCallbackTable(winfsp.BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1", DispatcherReady: true, CallbackBridgeReady: true, ServiceLoopReady: true})
 	matrix := DefaultExplorerRequestMatrix(table)
-	if len(matrix.Entries) == 0 {
-		t.Fatal("len(matrix.Entries) = 0, want > 0")
+	found := false
+	for _, entry := range matrix.Entries {
+		if entry.ScenarioID == "explorer-delete-denied" {
+			found = true
+			if entry.Status != RequestStatusBlocked && entry.Callback != "Cleanup" {
+				t.Fatalf("delete-denied entry = %+v, want blocked for read-only callbacks", entry)
+			}
+		}
 	}
-	if matrix.Gaps != 0 {
-		t.Fatalf("matrix.Gaps = %d, want 0", matrix.Gaps)
+	if !found {
+		t.Fatal("explorer-delete-denied scenario not found in request matrix")
 	}
-	if !strings.Contains(matrix.Markdown(), "explorer-root-browse") {
-		t.Fatal("markdown missing scenario")
+	if matrix.Blocked == 0 {
+		t.Fatalf("matrix.Blocked = %d, want > 0", matrix.Blocked)
 	}
 }

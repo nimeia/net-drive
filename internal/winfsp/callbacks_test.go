@@ -5,6 +5,7 @@ import (
 	"developer-mount/internal/protocol"
 	adapterpkg "developer-mount/internal/winfsp/adapter"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -59,22 +60,32 @@ func TestCallbacksMapReadOnlyFlow(t *testing.T) {
 		t.Fatalf("Open(file) status = 0x%08x", uint32(status))
 	}
 	secByName, status := callbacks.GetSecurityByName(`/file.txt`)
-	if status != StatusSuccess || secByName.Descriptor == "" || secByName.Path != "/file.txt" {
+	if status != StatusSuccess || secByName.Descriptor == "" || secByName.Path != "/file.txt" || secByName.Owner == "" || len(secByName.Access) == 0 {
 		t.Fatalf("GetSecurityByName() = %+v status=0x%08x", secByName, uint32(status))
 	}
 	data, eof, status := callbacks.Read(fileOpen.HandleID, 0, 4)
 	if status != StatusSuccess || string(data) != "data" || !eof {
 		t.Fatalf("Read() = data=%q eof=%v status=0x%08x", string(data), eof, uint32(status))
 	}
+	if status := callbacks.CanDelete(`/file.txt`); status != StatusAccessDenied {
+		t.Fatalf("CanDelete(file) status = 0x%08x", uint32(status))
+	}
+	if status := callbacks.SetDeleteOnClose(fileOpen.HandleID, true); status != StatusAccessDenied {
+		t.Fatalf("SetDeleteOnClose(file,true) status = 0x%08x", uint32(status))
+	}
 	if status := callbacks.Flush(fileOpen.HandleID); status != StatusSuccess {
 		t.Fatalf("Flush(file) status = 0x%08x", uint32(status))
 	}
 	sec, status := callbacks.GetSecurity(fileOpen.HandleID)
-	if status != StatusSuccess || sec.Descriptor == "" || !sec.HandleBound {
+	if status != StatusSuccess || sec.Descriptor == "" || !sec.HandleBound || !sec.DeleteOnClose || sec.CleanupState == "" || sec.FlushState != "flushed" || !strings.Contains(sec.Summary, "delete-on-close") {
 		t.Fatalf("GetSecurity(handle) = %+v status=0x%08x", sec, uint32(status))
 	}
 	if status := callbacks.Cleanup(fileOpen.HandleID); status != StatusSuccess {
 		t.Fatalf("Cleanup(file) status = 0x%08x", uint32(status))
+	}
+	sec, status = callbacks.GetSecurity(fileOpen.HandleID)
+	if status != StatusSuccess || sec.CleanupState != "delete-on-close-denied" {
+		t.Fatalf("GetSecurity(after-cleanup) = %+v status=0x%08x", sec, uint32(status))
 	}
 	if status := callbacks.Close(fileOpen.HandleID); status != StatusSuccess {
 		t.Fatalf("Close(file) status = 0x%08x", uint32(status))

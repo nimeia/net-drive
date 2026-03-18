@@ -19,7 +19,7 @@ func TestDefaultNativeCallbackTableDispatcherReady(t *testing.T) {
 	if table.MissingHotPathCount() != 0 {
 		t.Fatalf("MissingHotPathCount = %d, want 0", table.MissingHotPathCount())
 	}
-	for _, want := range []string{"GetVolumeInfo", "Cleanup", "Flush", "GetSecurityByName", "GetSecurity"} {
+	for _, want := range []string{"GetVolumeInfo", "Cleanup", "Flush", "GetSecurityByName", "GetSecurity", "CanDelete", "SetDeleteOnClose"} {
 		if !strings.Contains(table.Markdown(), want) {
 			t.Fatalf("markdown missing %q", want)
 		}

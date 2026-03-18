@@ -24,9 +24,17 @@ type ABIDirectoryEntry struct {
 	IsDirectory bool
 }
 type ABISecurityInfo struct {
-	Path       string
-	Descriptor string
-	ReadOnly   bool
+	Path          string
+	Descriptor    string
+	Owner         string
+	Group         string
+	ReadOnly      bool
+	Directory     bool
+	HandleBound   bool
+	DeleteOnClose bool
+	CleanupState  string
+	FlushState    string
+	Source        string
 }
 type DispatcherABIState struct {
 	BridgeReady             bool
@@ -127,12 +135,22 @@ func (a *DispatcherABI) Flush(handleID uint64) NTStatus {
 func (a *DispatcherABI) GetSecurityByName(path string) (ABISecurityInfo, NTStatus) {
 	info, status := a.bridge.GetSecurityByName(path)
 	a.record("GetSecurityByName", status, path)
-	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, ReadOnly: info.ReadOnly}, status
+	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, Owner: info.Owner, Group: info.Group, ReadOnly: info.ReadOnly, Directory: info.Directory, HandleBound: info.HandleBound, DeleteOnClose: info.DeleteOnClose, CleanupState: info.CleanupState, FlushState: info.FlushState, Source: info.Source}, status
 }
 func (a *DispatcherABI) GetSecurity(handleID uint64) (ABISecurityInfo, NTStatus) {
 	info, status := a.bridge.GetSecurity(handleID)
 	a.record("GetSecurity", status, fmt.Sprintf("handle=%d", handleID))
-	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, ReadOnly: info.ReadOnly}, status
+	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, Owner: info.Owner, Group: info.Group, ReadOnly: info.ReadOnly, Directory: info.Directory, HandleBound: info.HandleBound, DeleteOnClose: info.DeleteOnClose, CleanupState: info.CleanupState, FlushState: info.FlushState, Source: info.Source}, status
+}
+func (a *DispatcherABI) CanDelete(path string) NTStatus {
+	status := a.bridge.CanDelete(path)
+	a.record("CanDelete", status, path)
+	return status
+}
+func (a *DispatcherABI) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
+	status := a.bridge.SetDeleteOnClose(handleID, enabled)
+	a.record("SetDeleteOnClose", status, fmt.Sprintf("handle=%d enabled=%v", handleID, enabled))
+	return status
 }
 func (a *DispatcherABI) Close(handleID uint64) NTStatus {
 	status := a.bridge.Close(handleID)

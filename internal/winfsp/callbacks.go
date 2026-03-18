@@ -17,20 +17,36 @@ type OpenResult struct {
 }
 
 type SecurityInfo struct {
-	Path        string `json:"path"`
-	Descriptor  string `json:"descriptor"`
-	ReadOnly    bool   `json:"read_only"`
-	HandleBound bool   `json:"handle_bound"`
+	Path          string   `json:"path"`
+	Descriptor    string   `json:"descriptor"`
+	Owner         string   `json:"owner"`
+	Group         string   `json:"group"`
+	Access        []string `json:"access,omitempty"`
+	ReadOnly      bool     `json:"read_only"`
+	HandleBound   bool     `json:"handle_bound"`
+	Directory     bool     `json:"directory"`
+	DeleteOnClose bool     `json:"delete_on_close,omitempty"`
+	CleanupState  string   `json:"cleanup_state,omitempty"`
+	FlushState    string   `json:"flush_state,omitempty"`
+	Source        string   `json:"source,omitempty"`
+	Summary       string   `json:"summary,omitempty"`
+}
+
+type handleState struct {
+	Info          FileInfo
+	DeleteOnClose bool
+	Cleaned       bool
+	Flushed       bool
 }
 
 type Callbacks struct {
 	adapter *adapterpkg.Adapter
 	mu      sync.Mutex
-	handles map[uint64]FileInfo
+	handles map[uint64]handleState
 }
 
 func NewCallbacks(a *adapterpkg.Adapter) *Callbacks {
-	return &Callbacks{adapter: a, handles: map[uint64]FileInfo{}}
+	return &Callbacks{adapter: a, handles: map[uint64]handleState{}}
 }
 func (c *Callbacks) GetVolumeInfo() (VolumeInfo, NTStatus) {
 	return c.adapter.GetVolumeInfo(), StatusSuccess
@@ -73,15 +89,21 @@ func (c *Callbacks) Read(handleID uint64, offset int64, length uint32) ([]byte, 
 	return result.Data, result.EOF, StatusSuccess
 }
 func (c *Callbacks) Cleanup(handleID uint64) NTStatus {
-	if _, ok := c.lookupHandle(handleID); !ok {
+	state, ok := c.lookupHandle(handleID)
+	if !ok {
 		return StatusInvalidHandle
 	}
+	state.Cleaned = true
+	c.updateHandle(handleID, state)
 	return StatusSuccess
 }
 func (c *Callbacks) Flush(handleID uint64) NTStatus {
-	if _, ok := c.lookupHandle(handleID); !ok {
+	state, ok := c.lookupHandle(handleID)
+	if !ok {
 		return StatusInvalidHandle
 	}
+	state.Flushed = true
+	c.updateHandle(handleID, state)
 	return StatusSuccess
 }
 func (c *Callbacks) GetSecurityByName(path string) (SecurityInfo, NTStatus) {
@@ -89,14 +111,33 @@ func (c *Callbacks) GetSecurityByName(path string) (SecurityInfo, NTStatus) {
 	if status != StatusSuccess {
 		return SecurityInfo{}, status
 	}
-	return SecurityInfo{Path: info.Path, Descriptor: defaultSecurityDescriptor(info), ReadOnly: true, HandleBound: false}, StatusSuccess
+	return securityInfoFromDescriptor(DefaultNativeSecurityDescriptor(info, SecurityDescriptorOptions{Source: SecuritySourceByName})), StatusSuccess
 }
 func (c *Callbacks) GetSecurity(handleID uint64) (SecurityInfo, NTStatus) {
-	info, ok := c.lookupHandle(handleID)
+	state, ok := c.lookupHandle(handleID)
 	if !ok {
 		return SecurityInfo{}, StatusInvalidHandle
 	}
-	return SecurityInfo{Path: info.Path, Descriptor: defaultSecurityDescriptor(info), ReadOnly: true, HandleBound: true}, StatusSuccess
+	descriptor := DefaultNativeSecurityDescriptor(state.Info, SecurityDescriptorOptions{HandleBound: true, DeleteOnClose: state.DeleteOnClose, Cleaned: state.Cleaned, Flushed: state.Flushed, Source: SecuritySourceByHandle})
+	return securityInfoFromDescriptor(descriptor), StatusSuccess
+}
+func (c *Callbacks) CanDelete(path string) NTStatus {
+	if _, status := c.GetFileInfo(path); status != StatusSuccess {
+		return status
+	}
+	return StatusAccessDenied
+}
+func (c *Callbacks) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
+	state, ok := c.lookupHandle(handleID)
+	if !ok {
+		return StatusInvalidHandle
+	}
+	state.DeleteOnClose = enabled
+	c.updateHandle(handleID, state)
+	if enabled {
+		return StatusAccessDenied
+	}
+	return StatusSuccess
 }
 func (c *Callbacks) Close(handleID uint64) NTStatus {
 	if err := c.adapter.Close(handleID); err != nil {
@@ -111,24 +152,29 @@ func (c *Callbacks) trackHandle(handleID uint64, info FileInfo) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.handles == nil {
-		c.handles = map[uint64]FileInfo{}
+		c.handles = map[uint64]handleState{}
 	}
-	c.handles[handleID] = info
+	c.handles[handleID] = handleState{Info: info}
 }
-func (c *Callbacks) lookupHandle(handleID uint64) (FileInfo, bool) {
+func (c *Callbacks) lookupHandle(handleID uint64) (handleState, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	info, ok := c.handles[handleID]
 	return info, ok
+}
+func (c *Callbacks) updateHandle(handleID uint64, state handleState) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.handles == nil {
+		c.handles = map[uint64]handleState{}
+	}
+	c.handles[handleID] = state
 }
 func (c *Callbacks) untrackHandle(handleID uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.handles, handleID)
 }
-func defaultSecurityDescriptor(info FileInfo) string {
-	if info.IsDirectory {
-		return "O:BAG:BAD:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FR;;;WD)"
-	}
-	return "O:BAG:BAD:PAI(A;;FA;;;SY)(A;;FA;;;BA)(A;;FR;;;WD)"
+func securityInfoFromDescriptor(d NativeSecurityDescriptor) SecurityInfo {
+	return SecurityInfo{Path: d.Path, Descriptor: d.SDDL, Owner: d.Owner, Group: d.Group, Access: d.Access, ReadOnly: d.ReadOnly, HandleBound: d.HandleBound, Directory: d.Directory, DeleteOnClose: d.DeleteOnClose, CleanupState: d.CleanupState, FlushState: d.FlushState, Source: string(d.Source), Summary: d.Summary()}
 }

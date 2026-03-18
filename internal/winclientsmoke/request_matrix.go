@@ -11,8 +11,9 @@ import (
 type RequestStatus string
 
 const (
-	RequestStatusReady RequestStatus = "ready"
-	RequestStatusGap   RequestStatus = "gap"
+	RequestStatusReady   RequestStatus = "ready"
+	RequestStatusGap     RequestStatus = "gap"
+	RequestStatusBlocked RequestStatus = "blocked"
 )
 
 type RequestMatrixEntry struct {
@@ -26,6 +27,7 @@ type RequestMatrixEntry struct {
 type RequestMatrix struct {
 	Ready   int                  `json:"ready"`
 	Gaps    int                  `json:"gaps"`
+	Blocked int                  `json:"blocked"`
 	Entries []RequestMatrixEntry `json:"entries"`
 }
 
@@ -39,8 +41,11 @@ func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatri
 		cb := callbackState[strings.ToLower(callback)]
 		status := RequestStatusReady
 		detail := cb.Detail
-		if cb.State == winfsp.CallbackStateGap || cb.State == winfsp.CallbackStatePreflight {
+		switch cb.State {
+		case winfsp.CallbackStateGap, winfsp.CallbackStatePreflight:
 			status = RequestStatusGap
+		case winfsp.CallbackStateReadOnly:
+			status = RequestStatusBlocked
 		}
 		entries = append(entries, RequestMatrixEntry{ScenarioID: scenarioID, Request: request, Callback: callback, Status: status, Detail: detail})
 	}
@@ -59,13 +64,19 @@ func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatri
 	add("explorer-properties", "Query security by name", "GetSecurityByName")
 	add("explorer-properties", "Query security on open handle", "GetSecurity")
 	add("explorer-security-query", "Read root security by name", "GetSecurityByName")
+	add("explorer-delete-denied", "Probe delete permission", "CanDelete")
+	add("explorer-delete-denied", "Attempt delete-on-close on open handle", "SetDeleteOnClose")
+	add("explorer-delete-denied", "Cleanup denied delete handle", "Cleanup")
 	add("explorer-unmount-cleanup", "Explorer cleanup after stop", "Cleanup")
 	add("explorer-diagnostics", "Query diagnostics metadata", "GetVolumeInfo")
 	m := RequestMatrix{Entries: entries}
 	for _, e := range entries {
-		if e.Status == RequestStatusGap {
+		switch e.Status {
+		case RequestStatusGap:
 			m.Gaps++
-		} else {
+		case RequestStatusBlocked:
+			m.Blocked++
+		default:
 			m.Ready++
 		}
 	}
@@ -73,7 +84,7 @@ func DefaultExplorerRequestMatrix(table winfsp.NativeCallbackTable) RequestMatri
 }
 
 func (m RequestMatrix) Summary() string {
-	return fmt.Sprintf("entries=%d ready=%d gaps=%d", len(m.Entries), m.Ready, m.Gaps)
+	return fmt.Sprintf("entries=%d ready=%d blocked=%d gaps=%d", len(m.Entries), m.Ready, m.Blocked, m.Gaps)
 }
 
 func (m RequestMatrix) JSON() ([]byte, error) { return json.MarshalIndent(m, "", "  ") }

@@ -76,6 +76,12 @@ func (s *DispatcherService) Start(rootPath string) error {
 		_ = s.abi.Cleanup(handleID)
 		_ = s.abi.Close(handleID)
 	}
+	_ = s.abi.CanDelete(rootPath)
+	if handleID, _, status := s.abi.Open("/README.md"); status == StatusSuccess {
+		_ = s.abi.SetDeleteOnClose(handleID, true)
+		_ = s.abi.Cleanup(handleID)
+		_ = s.abi.Close(handleID)
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.state.Created = true

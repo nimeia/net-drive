@@ -61,6 +61,7 @@ Status: NOT-RUN
 - [ ] explorer-file-preview
 - [ ] explorer-readonly-copy
 - [ ] explorer-properties
+- [ ] explorer-delete-denied
 - [ ] explorer-diagnostics
 - [ ] explorer-unmount-cleanup
 
@@ -69,3 +70,34 @@ Status: NOT-RUN
 - [ ] relaunch warning captured
 - [ ] clean stop recorded
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-validation-template.md")
+
+@"
+# Windows Installer Results Template
+
+Version: $Version
+
+## MSI
+- [ ] install
+- [ ] upgrade
+- [ ] uninstall
+
+## EXE
+- [ ] portable launch
+
+## Notes
+- Fill this file together with windows-host-validation-template.json after running real Windows-host validation.
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-installer-results-template.md")
+
+@"
+{
+  "version": "$Version",
+  "msi": {"install": "not-run", "upgrade": "not-run", "uninstall": "not-run"},
+  "exe": {"portable_launch": "not-run"},
+  "notes": [
+    "Backfill this file after running the real Windows host installer checks."
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-installer-results-template.json")
+
+Copy-Item (Join-Path $release "windows-host-validation-template.json") (Join-Path $release "windows-host-validation-result-template.json") -Force
+Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path $release "windows-host-validation-result-template.md") -Force

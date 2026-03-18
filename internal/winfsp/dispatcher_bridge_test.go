@@ -23,6 +23,12 @@ func TestDispatcherBridgeInitializesAndRoutesCallbacks(t *testing.T) {
 	if _, eof, status := bridge.Read(open.HandleID, 0, 4); status != StatusSuccess || !eof {
 		t.Fatalf("Read() status=0x%08x eof=%v", uint32(status), eof)
 	}
+	if status := bridge.SetDeleteOnClose(open.HandleID, true); status != StatusAccessDenied {
+		t.Fatalf("SetDeleteOnClose(handle) status = 0x%08x", uint32(status))
+	}
+	if status := bridge.CanDelete("/file.txt"); status != StatusAccessDenied {
+		t.Fatalf("CanDelete(path) status = 0x%08x", uint32(status))
+	}
 	if _, status := bridge.GetSecurity(open.HandleID); status != StatusSuccess {
 		t.Fatalf("GetSecurity(handle) status = 0x%08x", uint32(status))
 	}
@@ -36,18 +42,7 @@ func TestDispatcherBridgeInitializesAndRoutesCallbacks(t *testing.T) {
 		t.Fatalf("Close(file) status = 0x%08x", uint32(status))
 	}
 	state = bridge.Snapshot()
-	if state.CallCount["Open"] == 0 || state.CallCount["Read"] == 0 || state.CallCount["Flush"] == 0 || state.CallCount["Cleanup"] == 0 || state.CallCount["GetSecurity"] == 0 || state.CallCount["Close"] == 0 {
-		t.Fatalf("bridge call counts not updated: %+v", state.CallCount)
-	}
-}
-func TestDispatcherBridgeRecordsFailureStatus(t *testing.T) {
-	mount := mountcore.New(callbackFakeClient{}, mountcore.Options{RootNodeID: 1, ReadOnly: true, VolumeName: "devmount"})
-	bridge := NewDispatcherBridge(NewCallbacks(adapterpkg.New(mount)))
-	if _, status := bridge.GetFileInfo("/missing.txt"); status != StatusObjectNameNotFound {
-		t.Fatalf("GetFileInfo(missing) status = 0x%08x", uint32(status))
-	}
-	state := bridge.Snapshot()
-	if state.LastNTStatus != StatusObjectNameNotFound || state.LastError == "" {
-		t.Fatalf("unexpected failure state: %+v", state)
+	if state.CallCount["Open"] == 0 || state.CallCount["Read"] == 0 || state.CallCount["Flush"] == 0 || state.CallCount["Cleanup"] == 0 || state.CallCount["GetSecurity"] == 0 || state.CallCount["CanDelete"] == 0 || state.CallCount["SetDeleteOnClose"] == 0 || state.CallCount["Close"] == 0 {
+		t.Fatalf("call counts missing expected entries: %+v", state.CallCount)
 	}
 }

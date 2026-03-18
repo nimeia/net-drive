@@ -115,6 +115,16 @@ func (b *DispatcherBridge) GetSecurity(handleID uint64) (SecurityInfo, NTStatus)
 	b.record("GetSecurity", status, fmt.Sprintf("handle=%d", handleID))
 	return info, status
 }
+func (b *DispatcherBridge) CanDelete(path string) NTStatus {
+	status := b.callbacks.CanDelete(path)
+	b.record("CanDelete", status, path)
+	return status
+}
+func (b *DispatcherBridge) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
+	status := b.callbacks.SetDeleteOnClose(handleID, enabled)
+	b.record("SetDeleteOnClose", status, fmt.Sprintf("handle=%d enabled=%v", handleID, enabled))
+	return status
+}
 func (b *DispatcherBridge) Close(handleID uint64) NTStatus {
 	status := b.callbacks.Close(handleID)
 	b.record("Close", status, fmt.Sprintf("handle=%d", handleID))

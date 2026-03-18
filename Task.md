@@ -266,3 +266,17 @@
 - [x] diagnostics zip 导出 validation template（Markdown / JSON）
 - [x] release / installer 脚本增加 validation template 与实机闭环材料
 - [x] 新增 Iter 32 文档说明与 README 更新
+
+## Iter 33 — 完整 WinFsp native security descriptor / cleanup semantics / set-delete-on-close 收口
+- [x] 新增 native-style 安全描述符模型，输出 owner/group/access/SDDL 与 handle-bound 状态
+- [x] 回调层新增 CanDelete / SetDeleteOnClose，并把 delete-on-close denial 语义贯通到 callbacks / bridge / ABI / service warmup
+- [x] Cleanup / Flush 语义补充 handle 状态跟踪，安全查询可见 cleaned/flushed/delete-on-close
+- [x] native callback table 与 Explorer request matrix 增加 delete-denied 场景与 callback 覆盖
+- [x] 为安全描述符、delete-on-close、callback/request matrix 增加跨平台单测
+
+## Iter 34 — Windows 主机实机验证结果回填 + MSI/EXE 安装升级卸载实测收口
+- [x] Host validation record 增加 installer runs、summary、completed metadata 与回填 API
+- [x] diagnostics ZIP 增加 windows-host-validation-result-template.*
+- [x] release manifest 增加 validation template / installer result slots
+- [x] Windows host validation 模板覆盖 MSI install/upgrade/uninstall 与 EXE portable launch
+- [x] 更新 README 与 Iter 34 文档说明

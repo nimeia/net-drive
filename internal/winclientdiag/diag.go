@@ -368,6 +368,12 @@ func Export(path string, report Report) (string, error) {
 	if err := writeZipEntry(zw, "windows-host-validation-template.json", append(validationPayload, '\n')); err != nil {
 		return "", err
 	}
+	if err := writeZipEntry(zw, "windows-host-validation-result-template.md", []byte(validation.Markdown())); err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-host-validation-result-template.json", append(validationPayload, '\n')); err != nil {
+		return "", err
+	}
 	if err := zw.Close(); err != nil {
 		return "", fmt.Errorf("close diagnostics zip: %w", err)
 	}

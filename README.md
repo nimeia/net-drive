@@ -122,7 +122,7 @@ go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devm
 
 The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. Closing or minimizing the window keeps the client alive in the notification area, where the tray menu can reopen pages, start or stop the mount runtime, and export diagnostics. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
 
-The Windows client now also writes a structured local product log, runs a graded self-check, and exports a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher bridge state in the UI and diagnostics output. Dispatcher-v1 now includes a first callback bridge that warms up volume + root getattr paths before entering the host lifecycle. Iter 31 extends the read-only bridge to cover `Cleanup`, `Flush`, `GetSecurityByName`, and `GetSecurity`; Iter 32 adds Windows-host validation record templates to diagnostics/release artifacts so Explorer smoke and installer closure can be captured on a real machine.
+The Windows client now also writes a structured local product log, runs a graded self-check, and exports a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher bridge state in the UI and diagnostics output. Dispatcher-v1 now includes a first callback bridge that warms up volume + root getattr paths before entering the host lifecycle. Iter 31 extends the read-only bridge to cover `Cleanup`, `Flush`, `GetSecurityByName`, and `GetSecurity`; Iter 32 adds Windows-host validation record templates to diagnostics/release artifacts so Explorer smoke and installer closure can be captured on a real machine. Iter 33 upgrades the WinFsp security path to emit richer native-style read-only descriptors, explicit cleanup/flush state, and explicit `CanDelete` / `SetDeleteOnClose` denial semantics for Explorer. Iter 34 extends validation templates so real Windows-host MSI install / upgrade / uninstall and EXE portable launch results can be backfilled into a structured validation record.
 
 Windows-only host shell compile check:
 
@@ -193,10 +193,10 @@ go run ./cmd/devmount-client
 - Iter 26 WinFsp dispatcher callback bridge v1: `docs/architecture/windows-winfsp-dispatcher-bridge-v1.md`
 
 
-Iter 27 ABI bridge / dispatcher service loop v1: `docs/architecture/windows-winfsp-abi-bridge-v1.md`
-Iter 28 Explorer smoke / installer / crash recovery: `docs/architecture/windows-windows-host-smoke-installer-recovery.md`
-Iter 29 native callback table / Explorer request matrix: `docs/architecture/windows-winfsp-native-callback-table.md`
-Iter 30 MSI/EXE packaging + Windows host validation: `docs/architecture/windows-installer-msi-exe-validation.md`
+- Iter 27 ABI bridge / dispatcher service loop v1: `docs/architecture/windows-winfsp-abi-bridge-v1.md`
+- Iter 28 Explorer smoke / installer / crash recovery: `docs/architecture/windows-windows-host-smoke-installer-recovery.md`
+- Iter 29 native callback table / Explorer request matrix: `docs/architecture/windows-winfsp-native-callback-table.md`
+- Iter 30 MSI/EXE packaging + Windows host validation: `docs/architecture/windows-installer-msi-exe-validation.md`
 
 Windows installer stage:
 
@@ -205,7 +205,7 @@ Windows installer stage:
 ./scripts/package-windows-installer.ps1
 ```
 
-Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, `recovery.json`, `windows-host-validation-template.md`, and `windows-host-validation-template.json`.
+Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, `recovery.json`, `windows-host-validation-template.md`, `windows-host-validation-template.json`, `windows-host-validation-result-template.md`, and `windows-host-validation-result-template.json`.
 
 
 Windows release packaging:
@@ -214,4 +214,7 @@ Windows release packaging:
 ./scripts/package-windows-release.ps1 -Version 0.1.0
 ```
 
-This produces an EXE staging bundle, a WiX-based MSI source/output directory, and a release validation checklist that references the native callback table plus Explorer request matrix.
+This produces an EXE staging bundle, a WiX-based MSI source/output directory, a release validation checklist, and host/installer result templates that can be backfilled after real Windows-host MSI install / upgrade / uninstall and EXE launch validation.
+
+- Iter 33 WinFsp native security descriptor / cleanup / delete-on-close semantics: `docs/architecture/windows-winfsp-native-security-delete-semantics.md`
+- Iter 34 Windows host validation backfill / installer closure: `docs/architecture/windows-host-validation-backfill-installer-closure.md`

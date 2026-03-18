@@ -29,3 +29,20 @@ Write-Host "2. Exit the tray application"
 Write-Host "3. Remove the installed files"
 "@ | Set-Content -Encoding UTF8 (Join-Path $stage "uninstall.ps1")
 Write-Host "Prepared Windows installer stage at $stage"
+
+@"
+# Installer validation template
+
+## MSI
+- [ ] install
+- [ ] upgrade
+- [ ] uninstall
+
+## EXE
+- [ ] portable launch
+
+## Notes
+- Attach installer logs and Windows host validation result JSON.
+"@ | Set-Content -Encoding UTF8 (Join-Path $stage "windows-installer-results-template.md")
+
+Copy-Item (Join-Path $stage "windows-installer-results-template.md") (Join-Path $stage "windows-host-validation-result-template.md") -Force

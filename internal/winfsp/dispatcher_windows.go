@@ -8,13 +8,7 @@ import (
 	"syscall"
 )
 
-type dispatcherBindings struct {
-	create          *syscall.Proc
-	setMountPoint   *syscall.Proc
-	startDispatcher *syscall.Proc
-	stopDispatcher  *syscall.Proc
-	deleteFS        *syscall.Proc
-}
+type dispatcherBindings struct{ create, setMountPoint, startDispatcher, stopDispatcher, deleteFS *syscall.Proc }
 
 func probeDispatcherBindings(dllPath string) (dispatcherBindings, error) {
 	dll, err := syscall.LoadDLL(dllPath)
@@ -56,17 +50,31 @@ func runDispatcherHostV1(ctx context.Context, h *Host) error {
 		return fmt.Errorf("dispatcher-v1 requested but dispatcher APIs are not ready")
 	}
 	bridge := h.DispatcherBridge()
-	if bridge == nil {
-		return fmt.Errorf("dispatcher-v1 requested but dispatcher bridge is not initialized")
+	abi := h.DispatcherABI()
+	service := h.DispatcherService()
+	if bridge == nil || abi == nil || service == nil {
+		return fmt.Errorf("dispatcher-v1 requested but dispatcher bridge/ABI/service loop is not initialized")
 	}
-	if err := bridge.Initialize("/"); err != nil {
-		h.binding.DispatcherStatus = fmt.Sprintf("dispatcher bridge init failed: %v", err)
+	if err := service.Start("/"); err != nil {
+		binding := h.Binding()
+		binding.DispatcherStatus = bridge.Snapshot().Summary()
+		binding.CallbackBridgeStatus = abi.Snapshot().Summary()
+		binding.ServiceLoopStatus = service.Snapshot().Summary()
+		h.SetBinding(binding)
 		return err
 	}
-	state := bridge.Snapshot()
-	h.binding.DispatcherStatus = state.Summary()
+	binding := h.Binding()
+	binding.DispatcherStatus = bridge.Snapshot().Summary()
+	binding.CallbackBridgeReady = true
+	binding.CallbackBridgeStatus = abi.Snapshot().Summary()
+	binding.ServiceLoopReady = true
+	binding.ServiceLoopStatus = service.Snapshot().Summary()
+	h.SetBinding(binding)
 	<-ctx.Done()
-	state = bridge.Snapshot()
-	h.binding.DispatcherStatus = state.Summary() + " stopped"
+	service.Stop()
+	binding = h.Binding()
+	binding.CallbackBridgeStatus = abi.Snapshot().Summary()
+	binding.ServiceLoopStatus = service.Snapshot().Summary() + " stopped"
+	h.SetBinding(binding)
 	return nil
 }

@@ -220,3 +220,19 @@
 - [x] 为 callback bridge 增加 synthetic 单测，覆盖初始化、调用计数和失败状态
 - [x] Windows 交叉编译验证 devmount-client-win32 与 devmount-winfsp
 - [x] 更新 README 与 Iter 26 文档说明
+
+
+## Iter 27 — 完整 WinFsp ABI bridge / dispatcher service loop 第一版
+- [x] 新增 DispatcherABI，把 volume / getattr / open / opendir / readdir / read / close 映射到 ABI-facing bridge
+- [x] 新增 DispatcherService，提供 dispatcher-v1 的 start / stop / warmup / state 摘要
+- [x] host binding / runtime / diagnostics 摘要增加 callback bridge 与 service loop 状态
+- [x] 为 ABI bridge / service loop 增加 synthetic 单测
+- [x] 更新 README 与 Iter 27 文档说明
+
+## Iter 28 — Windows 主机 Explorer smoke / 安装链路 / 崩溃恢复联合收口
+- [x] 新增 Explorer smoke 清单导出（Markdown / JSON）
+- [x] 新增 winclientrecovery，记录脏退出 / 干净退出与最近运行态
+- [x] Diagnostics 导出打包 recovery.json 与 Explorer smoke 清单
+- [x] 新增 scripts/package-windows-installer.ps1，形成 Windows 安装链路 stage
+- [x] Dashboard / Diagnostics 展示 recovery 状态
+- [x] 更新 README 与 Iter 28 文档说明

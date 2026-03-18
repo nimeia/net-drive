@@ -15,7 +15,9 @@ import (
 	"developer-mount/internal/winclient"
 	"developer-mount/internal/winclientdiag"
 	"developer-mount/internal/winclientlog"
+	"developer-mount/internal/winclientrecovery"
 	"developer-mount/internal/winclientruntime"
+	"developer-mount/internal/winclientsmoke"
 	"developer-mount/internal/winfsp"
 	adapterpkg "developer-mount/internal/winfsp/adapter"
 )
@@ -142,7 +144,9 @@ func runDiagnostics(op string, cfg winclient.Config, diagnosticsPath string) {
 		log.Fatal(err)
 	}
 	tail, _ := logger.Tail(16 * 1024)
-	report := winclientdiag.NewChecker().Run(context.Background(), cfg, winclientruntime.Snapshot{RequestedBackend: cfg.HostBackend}, "", logger.Path(), tail)
+	recovery, _ := winclientrecovery.OpenDefault()
+	recoveryState, _ := recovery.Load()
+	report := winclientdiag.NewChecker().Run(context.Background(), cfg, winclientruntime.Snapshot{RequestedBackend: cfg.HostBackend}, "", logger.Path(), recovery.Path(), recoveryState, tail, winclientsmoke.DefaultExplorerSmoke())
 	if op == "selfcheck" {
 		fmt.Print(report.Text())
 		return

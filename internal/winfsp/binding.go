@@ -1,20 +1,27 @@
 package winfsp
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type BindingInfo struct {
-	RequestedBackend string
-	Backend          string
-	EffectiveBackend string
-	Available        bool
-	DLLPath          string
-	LauncherPath     string
-	MountPoint       string
-	PreflightOK      bool
-	PreflightError   string
-	DispatcherReady  bool
-	DispatcherStatus string
-	Note             string
+	RequestedBackend     string
+	Backend              string
+	EffectiveBackend     string
+	Available            bool
+	DLLPath              string
+	LauncherPath         string
+	MountPoint           string
+	PreflightOK          bool
+	PreflightError       string
+	DispatcherReady      bool
+	DispatcherStatus     string
+	CallbackBridgeReady  bool
+	CallbackBridgeStatus string
+	ServiceLoopReady     bool
+	ServiceLoopStatus    string
+	Note                 string
 }
 
 func (b BindingInfo) Summary() string {
@@ -35,10 +42,16 @@ func (b BindingInfo) Summary() string {
 	if backend == "" {
 		return status
 	}
+	parts := []string{status}
 	if b.DispatcherStatus != "" {
-		return fmt.Sprintf("%s (%s; %s)", backend, status, b.DispatcherStatus)
+		parts = append(parts, b.DispatcherStatus)
 	}
-	return fmt.Sprintf("%s (%s)", backend, status)
+	if b.CallbackBridgeStatus != "" {
+		parts = append(parts, b.CallbackBridgeStatus)
+	}
+	if b.ServiceLoopStatus != "" {
+		parts = append(parts, b.ServiceLoopStatus)
+	}
+	return fmt.Sprintf("%s (%s)", backend, strings.Join(parts, "; "))
 }
-
 func Probe(config HostConfig) (BindingInfo, error) { return probeBinding(config) }

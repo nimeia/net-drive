@@ -12,7 +12,9 @@ import (
 	"developer-mount/internal/winclient"
 	"developer-mount/internal/winclientdiag"
 	"developer-mount/internal/winclientlog"
+	"developer-mount/internal/winclientrecovery"
 	"developer-mount/internal/winclientruntime"
+	"developer-mount/internal/winclientsmoke"
 	"developer-mount/internal/winclientstore"
 )
 
@@ -26,6 +28,8 @@ type app struct {
 	store           winclientstore.Store
 	state           winclientstore.State
 	logger          winclientlog.Logger
+	recovery        winclientrecovery.Store
+	recoveryState   winclientrecovery.State
 	runtime         *winclientruntime.Runtime
 	currentPage     uiPage
 	trayInitialized bool
@@ -52,7 +56,11 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	a := &app{hInstance: hInstance, controls: map[int]uintptr{}, pageControls: map[uiPage][]uintptr{}, runner: winclient.NewRunner(), operations: winclient.Operations(), store: store, logger: logger, runtime: winclientruntime.New(nil)}
+	recovery, err := winclientrecovery.OpenDefault()
+	if err != nil {
+		return err
+	}
+	a := &app{hInstance: hInstance, controls: map[int]uintptr{}, pageControls: map[uiPage][]uintptr{}, runner: winclient.NewRunner(), operations: winclient.Operations(), store: store, logger: logger, recovery: recovery, runtime: winclientruntime.New(nil)}
 	activeApp = a
 	_ = a.logInfo("win32 client startup")
 	className := syscall.StringToUTF16Ptr("DeveloperMountWin32ProductWindow")
@@ -93,6 +101,12 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 			activeApp.hwnd = hwnd
 			activeApp.initControls()
 			activeApp.initTray()
+			if state, err := activeApp.recovery.Load(); err == nil {
+				activeApp.recoveryState = state
+				if state.Dirty {
+					_ = activeApp.logError("previous unclean shutdown detected: " + state.Summary())
+				}
+			}
 			if err := activeApp.loadProfiles(); err != nil {
 				activeApp.resetDefaults()
 				activeApp.setText(idProfileName, "default")
@@ -132,6 +146,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 	case wmDestroy:
 		if activeApp != nil {
 			activeApp.removeTray()
+			activeApp.recoveryState, _ = activeApp.recovery.MarkCleanExit(activeApp.runtime.Snapshot())
 			_ = activeApp.logInfo("win32 client shutdown")
 		}
 		procKillTimer.Call(hwnd, timerRefreshID)
@@ -151,5 +166,7 @@ func (a *app) currentDiagnosticsReport() (winclientdiag.Report, error) {
 	}
 	tail, _ := a.logger.Tail(16 * 1024)
 	checker := winclientdiag.NewChecker()
-	return checker.Run(context.Background(), cfg, a.runtime.Snapshot(), a.store.Path(), a.logger.Path(), tail), nil
+	state, _ := a.recovery.Load()
+	a.recoveryState = state
+	return checker.Run(context.Background(), cfg, a.runtime.Snapshot(), a.store.Path(), a.logger.Path(), a.recovery.Path(), state, tail, winclientsmoke.DefaultExplorerSmoke()), nil
 }

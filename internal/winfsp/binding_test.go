@@ -12,7 +12,9 @@ func TestBindingInfoSummary(t *testing.T) {
 	if got := (BindingInfo{EffectiveBackend: "winfsp-native-preflight", PreflightError: "boom"}).Summary(); got != "winfsp-native-preflight (error: boom)" {
 		t.Fatalf("Summary error = %q", got)
 	}
-	if got := (BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1", DispatcherStatus: "dispatcher APIs ready"}).Summary(); got != "winfsp-dispatcher-v1 (unavailable; dispatcher APIs ready)" {
-		t.Fatalf("Summary dispatcher = %q", got)
+	got := (BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1", DispatcherStatus: "dispatcher APIs ready", CallbackBridgeStatus: "callback bridge scaffold ready", ServiceLoopStatus: "dispatcher service loop scaffold ready"}).Summary()
+	want := "winfsp-dispatcher-v1 (unavailable; dispatcher APIs ready; callback bridge scaffold ready; dispatcher service loop scaffold ready)"
+	if got != want {
+		t.Fatalf("Summary dispatcher = %q, want %q", got, want)
 	}
 }

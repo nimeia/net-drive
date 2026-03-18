@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"developer-mount/internal/winclient"
+	"developer-mount/internal/winclientrecovery"
 	"developer-mount/internal/winclientruntime"
+	"developer-mount/internal/winclientsmoke"
 	"developer-mount/internal/winfsp"
 )
 
@@ -29,20 +31,25 @@ const (
 )
 
 const (
-	CodeConfigValid           = "config.valid"
-	CodeConfigInvalid         = "config.invalid"
-	CodeWinFspBindingReady    = "winfsp.binding.ready"
-	CodeWinFspBindingMissing  = "winfsp.binding.missing"
-	CodeWinFspDispatcherReady = "winfsp.dispatcher.ready"
-	CodeWinFspDispatcherGap   = "winfsp.dispatcher.gap"
-	CodeServerConnectOK       = "network.server_connect.ok"
-	CodeServerConnectFailed   = "network.server_connect.failed"
-	CodeStorePathReady        = "storage.store_path.ready"
-	CodeStorePathMissing      = "storage.store_path.missing"
-	CodeLogPathReady          = "storage.log_path.ready"
-	CodeLogPathMissing        = "storage.log_path.missing"
-	CodeRuntimeHealthy        = "runtime.state.healthy"
-	CodeRuntimeError          = "runtime.state.error"
+	CodeConfigValid            = "config.valid"
+	CodeConfigInvalid          = "config.invalid"
+	CodeWinFspBindingReady     = "winfsp.binding.ready"
+	CodeWinFspBindingMissing   = "winfsp.binding.missing"
+	CodeWinFspDispatcherReady  = "winfsp.dispatcher.ready"
+	CodeWinFspDispatcherGap    = "winfsp.dispatcher.gap"
+	CodeWinFspCallbackReady    = "winfsp.callback_bridge.ready"
+	CodeWinFspServiceLoopReady = "winfsp.service_loop.ready"
+	CodeServerConnectOK        = "network.server_connect.ok"
+	CodeServerConnectFailed    = "network.server_connect.failed"
+	CodeStorePathReady         = "storage.store_path.ready"
+	CodeStorePathMissing       = "storage.store_path.missing"
+	CodeLogPathReady           = "storage.log_path.ready"
+	CodeLogPathMissing         = "storage.log_path.missing"
+	CodeRecoveryClean          = "recovery.clean"
+	CodeRecoveryUnclean        = "recovery.unclean"
+	CodeRuntimeHealthy         = "runtime.state.healthy"
+	CodeRuntimeError           = "runtime.state.error"
+	CodeExplorerSmokeDefined   = "smoke.explorer.defined"
 )
 
 type CheckResult struct {
@@ -63,16 +70,19 @@ type Summary struct {
 }
 
 type Report struct {
-	GeneratedAt time.Time                 `json:"generated_at"`
-	Config      winclient.Config          `json:"config"`
-	Snapshot    winclientruntime.Snapshot `json:"snapshot"`
-	Binding     winfsp.BindingInfo        `json:"binding"`
-	Checks      []CheckResult             `json:"checks"`
-	Summary     Summary                   `json:"summary"`
-	StorePath   string                    `json:"store_path,omitempty"`
-	LogPath     string                    `json:"log_path,omitempty"`
-	LogTail     string                    `json:"log_tail,omitempty"`
-	Notes       []string                  `json:"notes,omitempty"`
+	GeneratedAt    time.Time                 `json:"generated_at"`
+	Config         winclient.Config          `json:"config"`
+	Snapshot       winclientruntime.Snapshot `json:"snapshot"`
+	Binding        winfsp.BindingInfo        `json:"binding"`
+	Recovery       winclientrecovery.State   `json:"recovery"`
+	SmokeScenarios []winclientsmoke.Scenario `json:"smoke_scenarios,omitempty"`
+	Checks         []CheckResult             `json:"checks"`
+	Summary        Summary                   `json:"summary"`
+	StorePath      string                    `json:"store_path,omitempty"`
+	LogPath        string                    `json:"log_path,omitempty"`
+	RecoveryPath   string                    `json:"recovery_path,omitempty"`
+	LogTail        string                    `json:"log_tail,omitempty"`
+	Notes          []string                  `json:"notes,omitempty"`
 }
 
 type Checker struct {
@@ -86,7 +96,7 @@ func NewChecker() Checker {
 	return Checker{DialTimeout: 1500 * time.Millisecond, DialContext: d.DialContext, Now: time.Now}
 }
 
-func (c Checker) Run(ctx context.Context, cfg winclient.Config, snapshot winclientruntime.Snapshot, storePath, logPath, logTail string) Report {
+func (c Checker) Run(ctx context.Context, cfg winclient.Config, snapshot winclientruntime.Snapshot, storePath, logPath, recoveryPath string, recovery winclientrecovery.State, logTail string, smokeScenarios []winclientsmoke.Scenario) Report {
 	if c.Now == nil {
 		c.Now = time.Now
 	}
@@ -95,7 +105,11 @@ func (c Checker) Run(ctx context.Context, cfg winclient.Config, snapshot winclie
 		c.DialContext = d.DialContext
 	}
 	cfg = cfg.Normalized()
-	report := Report{GeneratedAt: c.Now(), Config: cfg, Snapshot: snapshot, StorePath: strings.TrimSpace(storePath), LogPath: strings.TrimSpace(logPath), LogTail: logTail}
+	if len(smokeScenarios) == 0 {
+		smokeScenarios = winclientsmoke.DefaultExplorerSmoke()
+	}
+	report := Report{GeneratedAt: c.Now(), Config: cfg, Snapshot: snapshot, StorePath: strings.TrimSpace(storePath), LogPath: strings.TrimSpace(logPath), RecoveryPath: strings.TrimSpace(recoveryPath), Recovery: recovery, LogTail: logTail, SmokeScenarios: smokeScenarios}
+
 	if err := cfg.Validate(winclient.OperationMount); err != nil {
 		report.Checks = append(report.Checks, newCheck(CodeConfigInvalid, "configuration", "Current profile configuration", StatusFail, err.Error(), "Fix the highlighted mount/profile fields and run self-check again."))
 	} else {
@@ -112,7 +126,9 @@ func (c Checker) Run(ctx context.Context, cfg winclient.Config, snapshot winclie
 			if !binding.DispatcherReady {
 				status, code, remediation = StatusFail, CodeWinFspDispatcherGap, "Install a WinFsp build that exports dispatcher APIs, or switch host backend back to preflight."
 			}
-			report.Checks = append(report.Checks, newCheck(code, "winfsp", "Dispatcher callback bridge", status, defaultText(binding.DispatcherStatus, "dispatcher status unavailable"), remediation))
+			report.Checks = append(report.Checks, newCheck(code, "winfsp", "Dispatcher APIs", status, defaultText(binding.DispatcherStatus, "dispatcher status unavailable"), remediation))
+			report.Checks = append(report.Checks, newCheck(CodeWinFspCallbackReady, "winfsp", "Dispatcher callback bridge", boolStatus(binding.CallbackBridgeReady), defaultText(binding.CallbackBridgeStatus, "callback bridge status unavailable"), "Use dispatcher-v1 only after callback bridge status reports ready."))
+			report.Checks = append(report.Checks, newCheck(CodeWinFspServiceLoopReady, "winfsp", "Dispatcher service loop", boolStatus(binding.ServiceLoopReady), defaultText(binding.ServiceLoopStatus, "service loop status unavailable"), "Verify the dispatcher service loop starts cleanly before running Explorer smoke."))
 		}
 	}
 	if strings.TrimSpace(cfg.Addr) == "" {
@@ -130,14 +146,28 @@ func (c Checker) Run(ctx context.Context, cfg winclient.Config, snapshot winclie
 	}
 	report.Checks = append(report.Checks, pathCheck("Client config store", storePath, CodeStorePathReady, CodeStorePathMissing))
 	report.Checks = append(report.Checks, pathCheck("Client log file", logPath, CodeLogPathReady, CodeLogPathMissing))
-	report.Checks = append(report.Checks, runtimeCheck(snapshot))
-	if strings.Contains(strings.ToLower(binding.Backend), "dispatcher") || strings.Contains(strings.ToLower(binding.EffectiveBackend), "dispatcher") {
-		report.Notes = append(report.Notes, "dispatcher-v1 now includes a first callback bridge for volume/getattr/open/readdir/read/close lifecycle warmup and host state reporting.")
+	report.Checks = append(report.Checks, pathCheck("Crash recovery marker", recoveryPath, CodeStorePathReady, CodeStorePathMissing))
+	if recovery.Dirty {
+		report.Checks = append(report.Checks, newCheck(CodeRecoveryUnclean, "recovery", "Previous shutdown state", StatusWarn, recovery.Summary(), "Review the recovery marker, runtime log tail, and rerun Explorer smoke after a clean stop."))
+	} else {
+		report.Checks = append(report.Checks, newCheck(CodeRecoveryClean, "recovery", "Previous shutdown state", StatusPass, recovery.Summary(), ""))
 	}
+	report.Checks = append(report.Checks, runtimeCheck(snapshot))
+	report.Checks = append(report.Checks, newCheck(CodeExplorerSmokeDefined, "smoke", "Explorer smoke manifest", StatusPass, fmt.Sprintf("%d scenarios prepared for Windows host validation", len(smokeScenarios)), "Run the smoke checklist on a Windows host after dispatcher-v1 reaches ready state."))
+	if strings.Contains(strings.ToLower(binding.Backend), "dispatcher") || strings.Contains(strings.ToLower(binding.EffectiveBackend), "dispatcher") {
+		report.Notes = append(report.Notes, "dispatcher-v1 now includes ABI bridge and service-loop scaffolding for volume/getattr/open/opendir/readdir/read/close lifecycle warmup.")
+	}
+	report.Notes = append(report.Notes, "The diagnostics export now bundles an Explorer smoke checklist and the current crash-recovery marker.")
 	report.Summary = summarizeChecks(report.Checks)
 	return report
 }
 
+func boolStatus(ok bool) Status {
+	if ok {
+		return StatusPass
+	}
+	return StatusWarn
+}
 func newCheck(code, category, name string, status Status, detail, remediation string) CheckResult {
 	return CheckResult{Code: code, Category: category, Name: name, Status: status, Severity: severityForStatus(status), Detail: strings.TrimSpace(detail), Remediation: strings.TrimSpace(remediation)}
 }
@@ -210,12 +240,15 @@ func pathCheck(name, path, passCode, missingCode string) CheckResult {
 	}
 }
 func (r Report) Text() string {
-	lines := []string{fmt.Sprintf("Generated: %s", r.GeneratedAt.Format(time.RFC3339)), fmt.Sprintf("Overall severity: %s", strings.ToUpper(string(r.Summary.OverallSeverity))), fmt.Sprintf("Check summary: pass=%d warn=%d fail=%d", r.Summary.Pass, r.Summary.Warn, r.Summary.Fail), fmt.Sprintf("Server: %s", r.Config.Addr), fmt.Sprintf("Mount point: %s", r.Config.MountPoint), fmt.Sprintf("Host backend: requested=%s effective=%s", defaultText(r.Config.HostBackend, "auto"), defaultText(r.Binding.EffectiveBackend, r.Binding.Backend)), fmt.Sprintf("Binding: %s", r.Binding.Summary())}
+	lines := []string{fmt.Sprintf("Generated: %s", r.GeneratedAt.Format(time.RFC3339)), fmt.Sprintf("Overall severity: %s", strings.ToUpper(string(r.Summary.OverallSeverity))), fmt.Sprintf("Check summary: pass=%d warn=%d fail=%d", r.Summary.Pass, r.Summary.Warn, r.Summary.Fail), fmt.Sprintf("Server: %s", r.Config.Addr), fmt.Sprintf("Mount point: %s", r.Config.MountPoint), fmt.Sprintf("Host backend: requested=%s effective=%s", defaultText(r.Config.HostBackend, "auto"), defaultText(r.Binding.EffectiveBackend, r.Binding.Backend)), fmt.Sprintf("Binding: %s", r.Binding.Summary()), fmt.Sprintf("Recovery: %s", r.Recovery.Summary())}
 	if strings.TrimSpace(r.StorePath) != "" {
 		lines = append(lines, fmt.Sprintf("Store path: %s", r.StorePath))
 	}
 	if strings.TrimSpace(r.LogPath) != "" {
 		lines = append(lines, fmt.Sprintf("Log path: %s", r.LogPath))
+	}
+	if strings.TrimSpace(r.RecoveryPath) != "" {
+		lines = append(lines, fmt.Sprintf("Recovery path: %s", r.RecoveryPath))
 	}
 	lines = append(lines, "", "Checks:")
 	for _, check := range r.Checks {
@@ -223,6 +256,9 @@ func (r Report) Text() string {
 		if check.Remediation != "" {
 			lines = append(lines, "  remediation: "+check.Remediation)
 		}
+	}
+	if len(r.SmokeScenarios) > 0 {
+		lines = append(lines, "", fmt.Sprintf("Explorer smoke scenarios: %d", len(r.SmokeScenarios)))
 	}
 	if len(r.Notes) > 0 {
 		lines = append(lines, "", "Notes:")
@@ -268,6 +304,24 @@ func Export(path string, report Report) (string, error) {
 	}
 	if strings.TrimSpace(report.LogTail) != "" {
 		if err := writeZipEntry(zw, "log-tail.txt", []byte(report.LogTail)); err != nil {
+			return "", err
+		}
+	}
+	if len(report.SmokeScenarios) > 0 {
+		if err := writeZipEntry(zw, "explorer-smoke.md", []byte(winclientsmoke.Markdown(report.SmokeScenarios))); err != nil {
+			return "", err
+		}
+		smokePayload, err := winclientsmoke.JSON(report.SmokeScenarios)
+		if err != nil {
+			return "", err
+		}
+		if err := writeZipEntry(zw, "explorer-smoke.json", append(smokePayload, '\n')); err != nil {
+			return "", err
+		}
+	}
+	recoveryPayload, err := json.MarshalIndent(report.Recovery, "", "  ")
+	if err == nil {
+		if err := writeZipEntry(zw, "recovery.json", append(recoveryPayload, '\n')); err != nil {
 			return "", err
 		}
 	}

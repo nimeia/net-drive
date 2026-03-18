@@ -111,6 +111,7 @@ func (a *app) startMount() {
 		a.state.ActiveProfile = profile
 		_ = a.store.Save(a.state)
 	}
+	a.recoveryState, _ = a.recovery.MarkStart(profile, cfg, a.runtime.Snapshot())
 	a.showPage(pageDashboard)
 	a.refreshRuntimeViews()
 	message := fmt.Sprintf("mount start requested for %s using backend %s", cfg.MountPoint, cfg.HostBackend)
@@ -124,6 +125,7 @@ func (a *app) stopMount() {
 		_ = a.logError("mount stop failed: " + err.Error())
 		return
 	}
+	a.recoveryState, _ = a.recovery.Update(a.runtime.Snapshot())
 	a.refreshRuntimeViews()
 	a.setOutput("mount stop requested")
 	_ = a.logInfo("mount stop requested")
@@ -163,6 +165,7 @@ func (a *app) showCLIPreview() {
 }
 func (a *app) refreshRuntimeViews() {
 	snapshot := a.runtime.Snapshot()
+	a.recoveryState, _ = a.recovery.Update(snapshot)
 	a.setHeaderStatus(snapshot)
 	a.setText(idDashboardSummary, windowsText(a.dashboardSummary(snapshot)))
 	a.setText(idDiagnosticsSummary, windowsText(a.diagnosticsSummary(snapshot)))
@@ -180,12 +183,41 @@ func (a *app) dashboardSummary(snapshot winclientruntime.Snapshot) string {
 	if profile == "" {
 		profile = "(unsaved draft)"
 	}
-	return fmt.Sprintf("Windows client shell\n\nPage: Dashboard\nCurrent profile: %s\nState: %s\nStatus: %s\nServer: %s\nMount point: %s\nVolume prefix: %s\nRemote path: %s\nClient instance: %s\nSession ID: %d\nPrincipal: %s\nServer version: %s %s\nLease expires: %s\nStore path: %s\nLog path: %s\nHost backend requested: %s\nHost backend effective: %s\nHost binding: %s\nDispatcher state: %s\nHost DLL: %s\nLauncher: %s\n\nUse Start Mount / Stop Mount to exercise the WinFsp host lifecycle.\nTray: close or minimize the window to keep the client running in the notification area.\nUse Profiles to edit connection and mount settings.\nUse Diagnostics to run volume/getattr/readdir/read/materialize, self-checks, and diagnostics export against the current profile.", profile, snapshot.Phase, snapshot.StatusText, emptyOrDraft(snapshot.ServerAddr, a.text(idAddr)), emptyOrDraft(snapshot.MountPoint, a.text(idMountPoint)), emptyOrDraft(snapshot.VolumePrefix, a.text(idVolumePrefix)), emptyOrDraft(snapshot.RemotePath, a.text(idPath)), emptyOrDraft(snapshot.ClientInstanceID, a.text(idClientInstance)), snapshot.SessionID, emptyOrDraft(snapshot.PrincipalID, "-"), emptyOrDraft(snapshot.ServerName, "-"), emptyOrDraft(snapshot.ServerVersion, "-"), emptyOrDraft(snapshot.ExpiresAt, "-"), a.store.Path(), a.logger.Path(), emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend()), emptyOrDraft(snapshot.HostBackend, "-"), emptyOrDraft(snapshot.HostBindingStatus, "-"), emptyOrDraft(snapshot.HostDispatcherState, "-"), emptyOrDraft(snapshot.HostDLLPath, "-"), emptyOrDraft(snapshot.HostLauncherPath, "-"))
+	return fmt.Sprintf(`Windows client shell
+
+Page: Dashboard
+Current profile: %s
+State: %s
+Status: %s
+Recovery: %s
+Server: %s
+Mount point: %s
+Volume prefix: %s
+Remote path: %s
+Client instance: %s
+Session ID: %d
+Principal: %s
+Server version: %s %s
+Lease expires: %s
+Store path: %s
+Log path: %s
+Recovery path: %s
+Host backend requested: %s
+Host backend effective: %s
+Host binding: %s
+Dispatcher state: %s
+Host DLL: %s
+Launcher: %s
+
+Use Start Mount / Stop Mount to exercise the WinFsp host lifecycle.
+Tray: close or minimize the window to keep the client running in the notification area.
+Use Profiles to edit connection and mount settings.
+Use Diagnostics to run volume/getattr/readdir/read/materialize, self-checks, diagnostics export, and Windows Explorer smoke against the current profile.`, profile, snapshot.Phase, snapshot.StatusText, a.recoveryState.Summary(), emptyOrDraft(snapshot.ServerAddr, a.text(idAddr)), emptyOrDraft(snapshot.MountPoint, a.text(idMountPoint)), emptyOrDraft(snapshot.VolumePrefix, a.text(idVolumePrefix)), emptyOrDraft(snapshot.RemotePath, a.text(idPath)), emptyOrDraft(snapshot.ClientInstanceID, a.text(idClientInstance)), snapshot.SessionID, emptyOrDraft(snapshot.PrincipalID, "-"), emptyOrDraft(snapshot.ServerName, "-"), emptyOrDraft(snapshot.ServerVersion, "-"), emptyOrDraft(snapshot.ExpiresAt, "-"), a.store.Path(), a.logger.Path(), a.recovery.Path(), emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend()), emptyOrDraft(snapshot.HostBackend, "-"), emptyOrDraft(snapshot.HostBindingStatus, "-"), emptyOrDraft(snapshot.HostDispatcherState, "-"), emptyOrDraft(snapshot.HostDLLPath, "-"), emptyOrDraft(snapshot.HostLauncherPath, "-"))
 }
 func (a *app) diagnosticsSummary(snapshot winclientruntime.Snapshot) string {
 	cfg, cfgErr := a.readConfigFields()
 	op, opErr := a.selectedOperation()
-	lines := []string{"Diagnostics snapshot", "", fmt.Sprintf("Runtime phase: %s", snapshot.Phase), fmt.Sprintf("Runtime status: %s", snapshot.StatusText), fmt.Sprintf("Runtime error: %s", emptyOrDraft(snapshot.LastError, "-")), fmt.Sprintf("Requested backend: %s", emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend())), fmt.Sprintf("Effective backend: %s", emptyOrDraft(snapshot.HostBackend, "-")), fmt.Sprintf("Host binding: %s", emptyOrDraft(snapshot.HostBindingStatus, "-")), fmt.Sprintf("Dispatcher state: %s", emptyOrDraft(snapshot.HostDispatcherState, "-")), fmt.Sprintf("Host DLL: %s", emptyOrDraft(snapshot.HostDLLPath, "-")), fmt.Sprintf("Launcher: %s", emptyOrDraft(snapshot.HostLauncherPath, "-")), fmt.Sprintf("Store path: %s", a.store.Path()), fmt.Sprintf("Log path: %s", a.logger.Path())}
+	lines := []string{"Diagnostics snapshot", "", fmt.Sprintf("Runtime phase: %s", snapshot.Phase), fmt.Sprintf("Runtime status: %s", snapshot.StatusText), fmt.Sprintf("Runtime error: %s", emptyOrDraft(snapshot.LastError, "-")), fmt.Sprintf("Recovery state: %s", a.recoveryState.Summary()), fmt.Sprintf("Requested backend: %s", emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend())), fmt.Sprintf("Effective backend: %s", emptyOrDraft(snapshot.HostBackend, "-")), fmt.Sprintf("Host binding: %s", emptyOrDraft(snapshot.HostBindingStatus, "-")), fmt.Sprintf("Dispatcher state: %s", emptyOrDraft(snapshot.HostDispatcherState, "-")), fmt.Sprintf("Host DLL: %s", emptyOrDraft(snapshot.HostDLLPath, "-")), fmt.Sprintf("Launcher: %s", emptyOrDraft(snapshot.HostLauncherPath, "-")), fmt.Sprintf("Store path: %s", a.store.Path()), fmt.Sprintf("Log path: %s", a.logger.Path()), fmt.Sprintf("Recovery path: %s", a.recovery.Path())}
 	if cfgErr == nil {
 		lines = append(lines, fmt.Sprintf("Current profile: %s", emptyOrDraft(strings.TrimSpace(a.text(idProfileName)), "(unsaved draft)")), fmt.Sprintf("Mount CLI: %s", winclient.BuildCLIPreview(cfg, winclient.OperationMount)))
 	} else {
@@ -196,7 +228,7 @@ func (a *app) diagnosticsSummary(snapshot winclientruntime.Snapshot) string {
 	} else if opErr != nil {
 		lines = append(lines, "Selected operation error: "+opErr.Error())
 	}
-	lines = append(lines, "", "Use Run Self-Check to validate the current profile and host binding.", "Use Export Diagnostics to generate a zip with report.txt/report.json/log-tail.txt.")
+	lines = append(lines, "", "Use Run Self-Check to validate the current profile and host binding.", "Use Export Diagnostics to generate a zip with report.txt/report.json/log-tail.txt/explorer-smoke.md/recovery.json.")
 	return strings.Join(lines, "\n")
 }
 func emptyOrDraft(value, fallback string) string {

@@ -30,10 +30,16 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 
 	if dispatcher, dispatcherErr := probeDispatcherBindings(dllPath); dispatcherErr != nil {
 		info.DispatcherStatus = dispatcherErr.Error()
+		info.CallbackBridgeStatus = "callback bridge unavailable until dispatcher APIs are ready"
+		info.ServiceLoopStatus = "service loop unavailable until dispatcher APIs are ready"
 	} else {
 		_ = dispatcher
 		info.DispatcherReady = true
 		info.DispatcherStatus = "dispatcher APIs ready"
+		info.CallbackBridgeReady = true
+		info.CallbackBridgeStatus = "callback bridge scaffold ready"
+		info.ServiceLoopReady = true
+		info.ServiceLoopStatus = "dispatcher service loop scaffold ready"
 	}
 	if strings.TrimSpace(config.MountPoint) == "" {
 		info.PreflightError = "mount point is required"

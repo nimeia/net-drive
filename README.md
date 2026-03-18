@@ -191,3 +191,16 @@ go run ./cmd/devmount-client
 
 - Iter 25 Windows diagnostics grading / structured logs: `docs/architecture/windows-client-diagnostics-v2.md`
 - Iter 26 WinFsp dispatcher callback bridge v1: `docs/architecture/windows-winfsp-dispatcher-bridge-v1.md`
+
+
+Iter 27 ABI bridge / dispatcher service loop v1: `docs/architecture/windows-winfsp-abi-bridge-v1.md`
+Iter 28 Explorer smoke / installer / crash recovery: `docs/architecture/windows-windows-host-smoke-installer-recovery.md`
+
+Windows installer stage:
+
+```powershell
+./scripts/build.ps1
+./scripts/package-windows-installer.ps1
+```
+
+Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, and `recovery.json`.

@@ -295,3 +295,19 @@
 - [x] 发布脚本增加 windows-release-closure-template.* 产物
 - [x] 新增 finalize-windows-release.ps1，用于基于回填结果生成最终 release closure
 - [x] 更新 README 与 Iter 36 文档说明
+
+
+## Iter 37 — 真实 Windows 主机回填首轮结果
+- [x] 为 HostValidationRecord 增加环境信息结构，支持记录机器、OS、WinFsp 版本、诊断包与安装日志目录
+- [x] 新增 ValidationPatch，支持把首轮 Windows 主机结果合并回 validation result template
+- [x] 新增 backfill-windows-validation.ps1，支持把 patch 合并到 windows-host-validation-result-template.json
+- [x] diagnostics / release 包新增 windows-host-backfill-patch-template 输出
+- [x] 为回填 patch 与环境合并增加单测
+
+## Iter 38 — 发布前问题清单与收口修复
+- [x] 新增 PreReleaseIssueList，按 explorer / installer / recovery / closure 生成发布前问题清单
+- [x] finalize-windows-release.ps1 新增 windows-pre-release-issues.json/.md 输出
+- [x] release manifest 增加 backfill patch / issue list 路径
+- [x] diagnostics 导出新增 windows-pre-release-issues 模板
+- [x] 为 issue list 生成增加单测
+- [x] 更新 README 与 Iter 37/38 文档说明

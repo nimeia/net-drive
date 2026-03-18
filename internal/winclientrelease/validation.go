@@ -50,11 +50,34 @@ type ValidationSummary struct {
 	Overall ValidationStatus `json:"overall"`
 }
 
+type HostEnvironment struct {
+	Source            string   `json:"source,omitempty"`
+	Machine           string   `json:"machine,omitempty"`
+	OSVersion         string   `json:"os_version,omitempty"`
+	WinFspVersion     string   `json:"winfsp_version,omitempty"`
+	PackageChannel    string   `json:"package_channel,omitempty"`
+	DiagnosticsBundle string   `json:"diagnostics_bundle,omitempty"`
+	InstallerLogDir   string   `json:"installer_log_dir,omitempty"`
+	Notes             []string `json:"notes,omitempty"`
+}
+
+type ValidationPatch struct {
+	CompletedBy        string               `json:"completed_by,omitempty"`
+	CompletedAt        *time.Time           `json:"completed_at,omitempty"`
+	Environment        HostEnvironment      `json:"environment,omitempty"`
+	ExplorerScenarios  []ScenarioRecord     `json:"explorer_scenarios,omitempty"`
+	InstallerChecklist []ChecklistRecord    `json:"installer_checklist,omitempty"`
+	RecoveryChecklist  []ChecklistRecord    `json:"recovery_checklist,omitempty"`
+	InstallerRuns      []InstallerRunRecord `json:"installer_runs,omitempty"`
+	Notes              []string             `json:"notes,omitempty"`
+}
+
 type HostValidationRecord struct {
 	GeneratedAt           time.Time            `json:"generated_at"`
 	CompletedAt           *time.Time           `json:"completed_at,omitempty"`
 	CompletedBy           string               `json:"completed_by,omitempty"`
 	Version               string               `json:"version,omitempty"`
+	Environment           HostEnvironment      `json:"environment,omitempty"`
 	NativeCallbackSummary string               `json:"native_callback_summary"`
 	ExplorerMatrixSummary string               `json:"explorer_matrix_summary"`
 	ExplorerScenarios     []ScenarioRecord     `json:"explorer_scenarios"`
@@ -69,6 +92,7 @@ func NewHostValidationRecord(version string, smoke []winclientsmoke.Scenario, ta
 	record := HostValidationRecord{
 		GeneratedAt:           time.Now().UTC(),
 		Version:               strings.TrimSpace(version),
+		Environment:           HostEnvironment{Source: "real-windows-host"},
 		NativeCallbackSummary: table.Summary(),
 		ExplorerMatrixSummary: matrix.Summary(),
 		Notes: []string{
@@ -188,6 +212,99 @@ func (r *HostValidationRecord) ApplyInstallerRun(channel, action string, status 
 	return false
 }
 
+func (r *HostValidationRecord) ApplyEnvironment(env HostEnvironment) {
+	if strings.TrimSpace(env.Source) != "" {
+		r.Environment.Source = strings.TrimSpace(env.Source)
+	}
+	if strings.TrimSpace(env.Machine) != "" {
+		r.Environment.Machine = strings.TrimSpace(env.Machine)
+	}
+	if strings.TrimSpace(env.OSVersion) != "" {
+		r.Environment.OSVersion = strings.TrimSpace(env.OSVersion)
+	}
+	if strings.TrimSpace(env.WinFspVersion) != "" {
+		r.Environment.WinFspVersion = strings.TrimSpace(env.WinFspVersion)
+	}
+	if strings.TrimSpace(env.PackageChannel) != "" {
+		r.Environment.PackageChannel = strings.TrimSpace(env.PackageChannel)
+	}
+	if strings.TrimSpace(env.DiagnosticsBundle) != "" {
+		r.Environment.DiagnosticsBundle = strings.TrimSpace(env.DiagnosticsBundle)
+	}
+	if strings.TrimSpace(env.InstallerLogDir) != "" {
+		r.Environment.InstallerLogDir = strings.TrimSpace(env.InstallerLogDir)
+	}
+	if len(env.Notes) > 0 {
+		r.Environment.Notes = append(r.Environment.Notes, env.Notes...)
+	}
+}
+
+func (r *HostValidationRecord) AddNote(note string) {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return
+	}
+	r.Notes = append(r.Notes, note)
+}
+
+func (r *HostValidationRecord) ApplyPatch(patch ValidationPatch) []string {
+	warnings := []string{}
+	r.ApplyEnvironment(patch.Environment)
+	for _, item := range patch.ExplorerScenarios {
+		if !r.ApplyScenario(item.ScenarioID, item.Status, item.Notes) {
+			warnings = append(warnings, fmt.Sprintf("unknown explorer scenario %q", item.ScenarioID))
+		}
+	}
+	for _, item := range patch.InstallerChecklist {
+		if !r.ApplyChecklist("installer", item.Item, item.Status, item.Notes) {
+			warnings = append(warnings, fmt.Sprintf("unknown installer checklist item %q", item.Item))
+		}
+	}
+	for _, item := range patch.RecoveryChecklist {
+		if !r.ApplyChecklist("recovery", item.Item, item.Status, item.Notes) {
+			warnings = append(warnings, fmt.Sprintf("unknown recovery checklist item %q", item.Item))
+		}
+	}
+	for _, item := range patch.InstallerRuns {
+		updated := false
+		for i := range r.InstallerRuns {
+			if r.InstallerRuns[i].Channel == item.Channel && r.InstallerRuns[i].Action == item.Action {
+				r.InstallerRuns[i].Status = item.Status
+				r.InstallerRuns[i].Notes = strings.TrimSpace(item.Notes)
+				if strings.TrimSpace(item.VersionFrom) != "" {
+					r.InstallerRuns[i].VersionFrom = strings.TrimSpace(item.VersionFrom)
+				}
+				if strings.TrimSpace(item.VersionTo) != "" {
+					r.InstallerRuns[i].VersionTo = strings.TrimSpace(item.VersionTo)
+				}
+				if strings.TrimSpace(item.LogPath) != "" {
+					r.InstallerRuns[i].LogPath = strings.TrimSpace(item.LogPath)
+				}
+				updated = true
+			}
+		}
+		if !updated {
+			warnings = append(warnings, fmt.Sprintf("unknown installer run %q/%q", item.Channel, item.Action))
+		}
+	}
+	for _, note := range patch.Notes {
+		r.AddNote(note)
+	}
+	completedBy := strings.TrimSpace(patch.CompletedBy)
+	if patch.CompletedAt != nil || completedBy != "" {
+		when := time.Now().UTC()
+		if patch.CompletedAt != nil {
+			when = patch.CompletedAt.UTC()
+		}
+		if completedBy == "" {
+			completedBy = r.CompletedBy
+		}
+		r.MarkCompleted(completedBy, when)
+	}
+	r.RecomputeSummary()
+	return warnings
+}
+
 func (r *HostValidationRecord) MarkCompleted(by string, when time.Time) {
 	when = when.UTC()
 	r.CompletedBy = strings.TrimSpace(by)
@@ -196,6 +313,9 @@ func (r *HostValidationRecord) MarkCompleted(by string, when time.Time) {
 
 func (r HostValidationRecord) JSON() ([]byte, error) { return json.MarshalIndent(r, "", "  ") }
 
+func hasEnvironmentData(env HostEnvironment) bool {
+	return strings.TrimSpace(env.Source) != "" || strings.TrimSpace(env.Machine) != "" || strings.TrimSpace(env.OSVersion) != "" || strings.TrimSpace(env.WinFspVersion) != "" || strings.TrimSpace(env.PackageChannel) != "" || strings.TrimSpace(env.DiagnosticsBundle) != "" || strings.TrimSpace(env.InstallerLogDir) != "" || len(env.Notes) > 0
+}
 func (r HostValidationRecord) Markdown() string {
 	var b strings.Builder
 	b.WriteString("# Windows Host Validation Record\n\n")
@@ -212,6 +332,34 @@ func (r HostValidationRecord) Markdown() string {
 	b.WriteString(fmt.Sprintf("Summary: overall=%s pass=%d warn=%d fail=%d not-run=%d\n", strings.ToUpper(string(r.Summary.Overall)), r.Summary.Pass, r.Summary.Warn, r.Summary.Fail, r.Summary.NotRun))
 	b.WriteString("Native callback summary: " + r.NativeCallbackSummary + "\n")
 	b.WriteString("Explorer matrix summary: " + r.ExplorerMatrixSummary + "\n\n")
+	if hasEnvironmentData(r.Environment) {
+		b.WriteString("## Environment\n")
+		if strings.TrimSpace(r.Environment.Source) != "" {
+			b.WriteString("- source: " + r.Environment.Source + "\n")
+		}
+		if strings.TrimSpace(r.Environment.Machine) != "" {
+			b.WriteString("- machine: " + r.Environment.Machine + "\n")
+		}
+		if strings.TrimSpace(r.Environment.OSVersion) != "" {
+			b.WriteString("- os_version: " + r.Environment.OSVersion + "\n")
+		}
+		if strings.TrimSpace(r.Environment.WinFspVersion) != "" {
+			b.WriteString("- winfsp_version: " + r.Environment.WinFspVersion + "\n")
+		}
+		if strings.TrimSpace(r.Environment.PackageChannel) != "" {
+			b.WriteString("- package_channel: " + r.Environment.PackageChannel + "\n")
+		}
+		if strings.TrimSpace(r.Environment.DiagnosticsBundle) != "" {
+			b.WriteString("- diagnostics_bundle: " + r.Environment.DiagnosticsBundle + "\n")
+		}
+		if strings.TrimSpace(r.Environment.InstallerLogDir) != "" {
+			b.WriteString("- installer_log_dir: " + r.Environment.InstallerLogDir + "\n")
+		}
+		for _, note := range r.Environment.Notes {
+			b.WriteString("- note: " + note + "\n")
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString("## Explorer scenarios\n")
 	for _, s := range r.ExplorerScenarios {
 		b.WriteString(fmt.Sprintf("- [%s] %s (%s)\n", strings.ToUpper(string(s.Status)), s.Name, s.ScenarioID))

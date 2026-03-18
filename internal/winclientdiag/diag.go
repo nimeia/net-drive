@@ -376,6 +376,21 @@ func Export(path string, report Report) (string, error) {
 	}
 	manifest := winclientrelease.NewManifest("", nil, report.CallbackTable, report.ExplorerMatrix, report.SmokeScenarios)
 	closure := winclientrelease.NewReleaseClosure(manifest, validation)
+	issues := winclientrelease.NewPreReleaseIssueList(manifest, validation, closure)
+	patch := winclientrelease.ValidationPatch{Environment: winclientrelease.HostEnvironment{Source: "real-windows-host", PackageChannel: "msi,exe"}, Notes: []string{"Fill this patch with first-pass Windows host validation results before re-finalizing the release."}}
+	if err := writeZipEntry(zw, "windows-host-backfill-patch-template.md", []byte(`# Windows Host Backfill Patch Template
+
+Update the matching JSON file with first-pass Windows host results, then merge it into windows-host-validation-result-template.json.
+`)); err != nil {
+		return "", err
+	}
+	patchPayload, err := json.MarshalIndent(patch, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-host-backfill-patch-template.json", append(patchPayload, byte(10))); err != nil {
+		return "", err
+	}
 	if err := writeZipEntry(zw, "windows-release-closure-template.md", []byte(closure.Markdown())); err != nil {
 		return "", err
 	}
@@ -383,7 +398,17 @@ func Export(path string, report Report) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := writeZipEntry(zw, "windows-release-closure-template.json", append(closurePayload, '\n')); err != nil {
+	if err := writeZipEntry(zw, "windows-release-closure-template.json", append(closurePayload, byte(10))); err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-pre-release-issues.md", []byte(issues.Markdown())); err != nil {
+		return "", err
+	}
+	issuePayload, err := issues.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-pre-release-issues.json", append(issuePayload, byte(10))); err != nil {
 		return "", err
 	}
 	if err := zw.Close(); err != nil {

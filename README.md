@@ -205,7 +205,7 @@ Windows installer stage:
 ./scripts/package-windows-installer.ps1
 ```
 
-Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, `recovery.json`, `windows-host-validation-template.md`, `windows-host-validation-template.json`, `windows-host-validation-result-template.md`, and `windows-host-validation-result-template.json`.
+Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, `recovery.json`, `windows-host-validation-template.md`, `windows-host-validation-template.json`, `windows-host-validation-result-template.md`, `windows-host-validation-result-template.json`, `windows-host-backfill-patch-template.md`, `windows-host-backfill-patch-template.json`, `windows-release-closure-template.md`, `windows-release-closure-template.json`, `windows-pre-release-issues.md`, and `windows-pre-release-issues.json`.
 
 
 Windows release packaging:
@@ -214,7 +214,7 @@ Windows release packaging:
 ./scripts/package-windows-release.ps1 -Version 0.1.0
 ```
 
-This produces an EXE staging bundle, a WiX-based MSI source/output directory, a release validation checklist, and host/installer result templates that can be backfilled after real Windows-host MSI install / upgrade / uninstall and EXE launch validation.
+This produces an EXE staging bundle, a WiX-based MSI source/output directory, a release validation checklist, host/installer result templates, a Windows-host backfill patch template, and pre-release issue templates that can be regenerated after each real Windows-host validation round.
 
 - Iter 33 WinFsp native security descriptor / cleanup / delete-on-close semantics: `docs/architecture/windows-winfsp-native-security-delete-semantics.md`
 - Iter 34 Windows host validation backfill / installer closure: `docs/architecture/windows-host-validation-backfill-installer-closure.md`
@@ -228,3 +228,15 @@ Finalize Windows release closure after backfilling the host validation result:
 
 - Iter 35 WinFsp native callback matrix final closure: `docs/architecture/windows-winfsp-native-callback-matrix-final.md`
 - Iter 36 Windows release final closure: `docs/architecture/windows-release-final-closure.md`
+- Iter 37 Windows host first-pass backfill: `docs/architecture/windows-host-first-pass-backfill.md`
+- Iter 38 Windows pre-release issues: `docs/architecture/windows-pre-release-issues.md`
+
+
+Apply a first-pass Windows host backfill patch:
+
+```powershell
+./scripts/backfill-windows-validation.ps1 \
+  -ValidationResultJson .\dist\windows-release\windows-host-validation-result-template.json \
+  -PatchJson .\dist\windows-release\windows-host-backfill-patch-template.json \
+  -CompletedBy "<tester>"
+```

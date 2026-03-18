@@ -9,8 +9,24 @@ New-Item -ItemType Directory -Force -Path $release | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "build.ps1 failed" }
 & (Join-Path $scriptDir "package-windows-msi.ps1") -Version $Version
 & (Join-Path $scriptDir "package-windows-exe.ps1") -Version $Version
-$manifest = [ordered]@{ package_name = "developer-mount-windows-client"; version = $Version; generated_at = (Get-Date).ToString("s"); artifacts = @(@{ name = "devmount-client-win32.exe"; kind = "exe"; path = "dist/devmount-client-win32.exe" }, @{ name = "devmount-winfsp.exe"; kind = "exe"; path = "dist/devmount-winfsp.exe" }, @{ name = "devmount-server.exe"; kind = "exe"; path = "dist/devmount-server.exe" }, @{ name = "msi"; kind = "installer"; path = "dist/windows-release/msi" }, @{ name = "portable-zip"; kind = "portable"; path = "dist/windows-release/exe" }) }
-$manifest | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 (Join-Path $release "release-manifest.json")
+$manifest = [ordered]@{
+  package_name = "developer-mount-windows-client"
+  version = $Version
+  generated_at = (Get-Date).ToString("s")
+  artifacts = @(
+    @{ name = "devmount-client-win32.exe"; kind = "exe"; path = "dist/devmount-client-win32.exe" },
+    @{ name = "devmount-winfsp.exe"; kind = "exe"; path = "dist/devmount-winfsp.exe" },
+    @{ name = "devmount-server.exe"; kind = "exe"; path = "dist/devmount-server.exe" },
+    @{ name = "msi"; kind = "installer"; path = "dist/windows-release/msi" },
+    @{ name = "portable-zip"; kind = "portable"; path = "dist/windows-release/exe" }
+  )
+  validation_template = "windows-host-validation-template.json"
+  validation_result = "windows-host-validation-result-template.json"
+  backfill_patch = "windows-host-backfill-patch-template.json"
+  release_closure = "windows-release-closure-template.json"
+  issue_list = "windows-pre-release-issues-template.json"
+}
+$manifest | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 (Join-Path $release "release-manifest.json")
 @"
 # Windows Release Validation
 
@@ -29,8 +45,9 @@ Version: $Version
 - Confirm the native callback table and Explorer request matrix summaries are present.
 - Run the Explorer smoke checklist on a Windows host.
 - Export diagnostics after smoke and archive the bundle.
+- Apply windows-host-backfill-patch-template.json after each validation round.
+- Regenerate closure and issue list outputs after each backfill.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "release-validation.md")
-Write-Host "Prepared Windows release assets at $release"
 
 @"
 {
@@ -103,6 +120,44 @@ Copy-Item (Join-Path $release "windows-host-validation-template.json") (Join-Pat
 Copy-Item (Join-Path $release "windows-host-validation-template.md") (Join-Path $release "windows-host-validation-result-template.md") -Force
 
 @"
+{
+  "environment": {
+    "source": "real-windows-host",
+    "machine": "",
+    "os_version": "",
+    "winfsp_version": "",
+    "package_channel": "msi,exe",
+    "diagnostics_bundle": "",
+    "installer_log_dir": ""
+  },
+  "explorer_scenarios": [
+    {"scenario_id": "explorer-mount-visible", "status": "not-run", "notes": ""}
+  ],
+  "installer_checklist": [
+    {"item": "MSI install succeeded", "status": "not-run", "notes": ""},
+    {"item": "EXE/portable bundle launch succeeded", "status": "not-run", "notes": ""}
+  ],
+  "recovery_checklist": [
+    {"item": "Next launch reports recovery warning", "status": "not-run", "notes": ""}
+  ],
+  "installer_runs": [
+    {"channel": "msi", "action": "install", "status": "not-run", "version_to": "$Version", "log_path": ""},
+    {"channel": "exe", "action": "portable-launch", "status": "not-run", "version_to": "$Version", "log_path": ""}
+  ],
+  "notes": [
+    "Fill only the fields observed during the current Windows host validation round."
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-backfill-patch-template.json")
+@"
+# Windows Host Backfill Patch Template
+
+Version: $Version
+
+Use `windows-host-backfill-patch-template.json` to record the first-pass Windows host results observed on the test machine. Merge the patch into `windows-host-validation-result-template.json`, then regenerate closure and issue-list outputs.
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-backfill-patch-template.md")
+
+@"
 # Windows Release Closure Template
 
 Version: $Version
@@ -131,3 +186,34 @@ State: NOT-READY
   ]
 }
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-closure-template.json")
+
+@"
+{
+  "version": "$Version",
+  "release_ready": false,
+  "open_count": 1,
+  "closed_count": 0,
+  "issues": [
+    {
+      "id": "scenario-explorer-mount-visible",
+      "category": "explorer",
+      "title": "Mount becomes visible in Explorer",
+      "severity": "blocker",
+      "status": "open",
+      "evidence": "scenario not yet executed on a Windows host",
+      "remediation": "Run the scenario and backfill the result."
+    }
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-pre-release-issues-template.json")
+@"
+# Windows Pre-Release Issue List Template
+
+Version: $Version
+Release state: NOT READY
+
+- [BLOCKER/OPEN] Mount becomes visible in Explorer
+  - evidence: scenario not yet executed on a Windows host
+  - remediation: Run the scenario and backfill the result.
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-pre-release-issues-template.md")
+Write-Host "Prepared Windows release assets at $release"

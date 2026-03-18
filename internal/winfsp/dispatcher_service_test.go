@@ -19,6 +19,10 @@ func TestDispatcherServiceStartStop(t *testing.T) {
 	if !snap.Created || !snap.Running || snap.StartCount == 0 {
 		t.Fatalf("unexpected service snapshot: %+v", snap)
 	}
+	abiSnap := abi.Snapshot()
+	if abiSnap.LastOperation == "" || abiSnap.Requests == 0 {
+		t.Fatalf("unexpected abi snapshot: %+v", abiSnap)
+	}
 	svc.Stop()
 	snap = svc.Snapshot()
 	if snap.Running || snap.StopCount == 0 {

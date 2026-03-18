@@ -13,10 +13,15 @@ func TestDefaultNativeCallbackTableDispatcherReady(t *testing.T) {
 	if table.Ready == 0 {
 		t.Fatalf("table.Ready = %d, want > 0", table.Ready)
 	}
-	if table.MissingHotPathCount() == 0 {
-		t.Fatal("expected at least one hot-path gap for Cleanup/GetSecurityByName coverage")
+	if table.Gaps != 0 {
+		t.Fatalf("table.Gaps = %d, want 0", table.Gaps)
 	}
-	if !strings.Contains(table.Markdown(), "GetVolumeInfo") {
-		t.Fatal("markdown missing callback entry")
+	if table.MissingHotPathCount() != 0 {
+		t.Fatalf("MissingHotPathCount = %d, want 0", table.MissingHotPathCount())
+	}
+	for _, want := range []string{"GetVolumeInfo", "Cleanup", "Flush", "GetSecurityByName", "GetSecurity"} {
+		if !strings.Contains(table.Markdown(), want) {
+			t.Fatalf("markdown missing %q", want)
+		}
 	}
 }

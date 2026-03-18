@@ -65,8 +65,15 @@ func (s *DispatcherService) Start(rootPath string) error {
 		s.record("warmup-root", status, err.Error())
 		return err
 	}
+	if _, status := s.abi.GetSecurityByName(rootPath); status != StatusSuccess {
+		err := StatusError(status, fmt.Errorf("dispatcher service root security warmup failed"))
+		s.record("warmup-security", status, err.Error())
+		return err
+	}
 	if handleID, _, status := s.abi.OpenDirectory(rootPath); status == StatusSuccess {
 		_, _, _, _ = s.abi.ReadDirectory(handleID, 0, 32)
+		_ = s.abi.Flush(handleID)
+		_ = s.abi.Cleanup(handleID)
 		_ = s.abi.Close(handleID)
 	}
 	s.mu.Lock()

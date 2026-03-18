@@ -122,7 +122,7 @@ go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devm
 
 The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. Closing or minimizing the window keeps the client alive in the notification area, where the tray menu can reopen pages, start or stop the mount runtime, and export diagnostics. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
 
-The Windows client now also writes a structured local product log, runs a graded self-check, and exports a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher bridge state in the UI and diagnostics output. Dispatcher-v1 now includes a first callback bridge that warms up volume + root getattr paths before entering the host lifecycle.
+The Windows client now also writes a structured local product log, runs a graded self-check, and exports a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher bridge state in the UI and diagnostics output. Dispatcher-v1 now includes a first callback bridge that warms up volume + root getattr paths before entering the host lifecycle. Iter 31 extends the read-only bridge to cover `Cleanup`, `Flush`, `GetSecurityByName`, and `GetSecurity`; Iter 32 adds Windows-host validation record templates to diagnostics/release artifacts so Explorer smoke and installer closure can be captured on a real machine.
 
 Windows-only host shell compile check:
 
@@ -205,7 +205,7 @@ Windows installer stage:
 ./scripts/package-windows-installer.ps1
 ```
 
-Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, and `recovery.json`.
+Diagnostics export now includes `explorer-smoke.md`, `explorer-smoke.json`, `explorer-request-matrix.md`, `explorer-request-matrix.json`, `winfsp-native-callbacks.md`, `winfsp-native-callbacks.json`, `recovery.json`, `windows-host-validation-template.md`, and `windows-host-validation-template.json`.
 
 
 Windows release packaging:

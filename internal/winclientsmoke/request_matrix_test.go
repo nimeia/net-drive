@@ -13,8 +13,8 @@ func TestDefaultExplorerRequestMatrix(t *testing.T) {
 	if len(matrix.Entries) == 0 {
 		t.Fatal("len(matrix.Entries) = 0, want > 0")
 	}
-	if matrix.Gaps == 0 {
-		t.Fatal("matrix.Gaps = 0, want > 0 because Cleanup is still a gap")
+	if matrix.Gaps != 0 {
+		t.Fatalf("matrix.Gaps = %d, want 0", matrix.Gaps)
 	}
 	if !strings.Contains(matrix.Markdown(), "explorer-root-browse") {
 		t.Fatal("markdown missing scenario")

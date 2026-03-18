@@ -31,3 +31,41 @@ Version: $Version
 - Export diagnostics after smoke and archive the bundle.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "release-validation.md")
 Write-Host "Prepared Windows release assets at $release"
+
+@"
+{
+  "generated_at": "$(Get-Date -Format s)",
+  "version": "$Version",
+  "status": "not-run",
+  "notes": [
+    "Fill this record on a real Windows host after running MSI/EXE validation and Explorer smoke."
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-validation-template.json")
+@"
+# Windows Host Validation Template
+
+Version: $Version
+Status: NOT-RUN
+
+## Installer
+- [ ] WinFsp installed and version captured
+- [ ] MSI install succeeded
+- [ ] EXE/portable launch succeeded
+- [ ] Upgrade path verified
+- [ ] Uninstall path verified
+
+## Explorer smoke
+- [ ] explorer-mount-visible
+- [ ] explorer-root-browse
+- [ ] explorer-file-preview
+- [ ] explorer-readonly-copy
+- [ ] explorer-properties
+- [ ] explorer-diagnostics
+- [ ] explorer-unmount-cleanup
+
+## Recovery
+- [ ] dirty-exit marker observed
+- [ ] relaunch warning captured
+- [ ] clean stop recorded
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-host-validation-template.md")

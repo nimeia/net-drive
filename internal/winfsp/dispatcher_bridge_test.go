@@ -23,11 +23,20 @@ func TestDispatcherBridgeInitializesAndRoutesCallbacks(t *testing.T) {
 	if _, eof, status := bridge.Read(open.HandleID, 0, 4); status != StatusSuccess || !eof {
 		t.Fatalf("Read() status=0x%08x eof=%v", uint32(status), eof)
 	}
+	if _, status := bridge.GetSecurity(open.HandleID); status != StatusSuccess {
+		t.Fatalf("GetSecurity(handle) status = 0x%08x", uint32(status))
+	}
+	if status := bridge.Flush(open.HandleID); status != StatusSuccess {
+		t.Fatalf("Flush(file) status = 0x%08x", uint32(status))
+	}
+	if status := bridge.Cleanup(open.HandleID); status != StatusSuccess {
+		t.Fatalf("Cleanup(file) status = 0x%08x", uint32(status))
+	}
 	if status := bridge.Close(open.HandleID); status != StatusSuccess {
 		t.Fatalf("Close(file) status = 0x%08x", uint32(status))
 	}
 	state = bridge.Snapshot()
-	if state.CallCount["Open"] == 0 || state.CallCount["Read"] == 0 || state.CallCount["Close"] == 0 {
+	if state.CallCount["Open"] == 0 || state.CallCount["Read"] == 0 || state.CallCount["Flush"] == 0 || state.CallCount["Cleanup"] == 0 || state.CallCount["GetSecurity"] == 0 || state.CallCount["Close"] == 0 {
 		t.Fatalf("bridge call counts not updated: %+v", state.CallCount)
 	}
 }

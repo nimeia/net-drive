@@ -23,6 +23,11 @@ type ABIDirectoryEntry struct {
 	Size        int64
 	IsDirectory bool
 }
+type ABISecurityInfo struct {
+	Path       string
+	Descriptor string
+	ReadOnly   bool
+}
 type DispatcherABIState struct {
 	BridgeReady             bool
 	RootPath                string
@@ -108,6 +113,26 @@ func (a *DispatcherABI) Read(handleID uint64, offset int64, length uint32) ([]by
 	data, eof, status := a.bridge.Read(handleID, offset, length)
 	a.record("Read", status, fmt.Sprintf("handle=%d offset=%d length=%d eof=%v", handleID, offset, length, eof))
 	return data, eof, status
+}
+func (a *DispatcherABI) Cleanup(handleID uint64) NTStatus {
+	status := a.bridge.Cleanup(handleID)
+	a.record("Cleanup", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (a *DispatcherABI) Flush(handleID uint64) NTStatus {
+	status := a.bridge.Flush(handleID)
+	a.record("Flush", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (a *DispatcherABI) GetSecurityByName(path string) (ABISecurityInfo, NTStatus) {
+	info, status := a.bridge.GetSecurityByName(path)
+	a.record("GetSecurityByName", status, path)
+	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, ReadOnly: info.ReadOnly}, status
+}
+func (a *DispatcherABI) GetSecurity(handleID uint64) (ABISecurityInfo, NTStatus) {
+	info, status := a.bridge.GetSecurity(handleID)
+	a.record("GetSecurity", status, fmt.Sprintf("handle=%d", handleID))
+	return ABISecurityInfo{Path: info.Path, Descriptor: info.Descriptor, ReadOnly: info.ReadOnly}, status
 }
 func (a *DispatcherABI) Close(handleID uint64) NTStatus {
 	status := a.bridge.Close(handleID)

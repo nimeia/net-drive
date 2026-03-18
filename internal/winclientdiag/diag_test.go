@@ -43,7 +43,7 @@ func TestCheckerRunAndExport(t *testing.T) {
 	for _, f := range zr.File {
 		have[f.Name] = true
 	}
-	for _, want := range []string{"report.txt", "report.json", "explorer-smoke.md", "explorer-smoke.json", "explorer-request-matrix.md", "explorer-request-matrix.json", "winfsp-native-callbacks.md", "winfsp-native-callbacks.json", "recovery.json", "log-tail.txt"} {
+	for _, want := range []string{"report.txt", "report.json", "explorer-smoke.md", "explorer-smoke.json", "explorer-request-matrix.md", "explorer-request-matrix.json", "winfsp-native-callbacks.md", "winfsp-native-callbacks.json", "recovery.json", "log-tail.txt", "windows-host-validation-template.md", "windows-host-validation-template.json"} {
 		if !have[want] {
 			t.Fatalf("zip missing %q", want)
 		}

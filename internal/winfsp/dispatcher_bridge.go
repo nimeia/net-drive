@@ -55,6 +55,9 @@ func (b *DispatcherBridge) Initialize(rootPath string) error {
 	if _, status := b.GetFileInfo(rootPath); status != StatusSuccess {
 		return StatusError(status, fmt.Errorf("GetFileInfo(%s) failed during dispatcher bridge initialization", rootPath))
 	}
+	if _, status := b.GetSecurityByName(rootPath); status != StatusSuccess {
+		return StatusError(status, fmt.Errorf("GetSecurityByName(%s) failed during dispatcher bridge initialization", rootPath))
+	}
 	b.mu.Lock()
 	b.state.Initialized = true
 	b.state.RootPath = rootPath
@@ -91,6 +94,26 @@ func (b *DispatcherBridge) Read(handleID uint64, offset int64, length uint32) ([
 	data, eof, status := b.callbacks.Read(handleID, offset, length)
 	b.record("Read", status, fmt.Sprintf("handle=%d offset=%d length=%d eof=%v", handleID, offset, length, eof))
 	return data, eof, status
+}
+func (b *DispatcherBridge) Cleanup(handleID uint64) NTStatus {
+	status := b.callbacks.Cleanup(handleID)
+	b.record("Cleanup", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (b *DispatcherBridge) Flush(handleID uint64) NTStatus {
+	status := b.callbacks.Flush(handleID)
+	b.record("Flush", status, fmt.Sprintf("handle=%d", handleID))
+	return status
+}
+func (b *DispatcherBridge) GetSecurityByName(path string) (SecurityInfo, NTStatus) {
+	info, status := b.callbacks.GetSecurityByName(path)
+	b.record("GetSecurityByName", status, path)
+	return info, status
+}
+func (b *DispatcherBridge) GetSecurity(handleID uint64) (SecurityInfo, NTStatus) {
+	info, status := b.callbacks.GetSecurity(handleID)
+	b.record("GetSecurity", status, fmt.Sprintf("handle=%d", handleID))
+	return info, status
 }
 func (b *DispatcherBridge) Close(handleID uint64) NTStatus {
 	status := b.callbacks.Close(handleID)

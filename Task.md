@@ -252,3 +252,17 @@
 - [x] 新增 release manifest / validation checklist 生成逻辑与单测
 - [x] 新增 Windows 主机联合验证文档与发布校验清单
 - [x] 更新 README 与安装链路说明
+
+
+## Iter 31 — 完整 WinFsp security / cleanup / flush callback 收口
+- [x] 新增 Cleanup / Flush / GetSecurityByName / GetSecurity 回调并接到 callbacks / bridge / ABI
+- [x] dispatcher service warmup 覆盖 security / flush / cleanup 路径
+- [x] native callback table 收口上述回调为 ready
+- [x] Explorer request matrix 增加 properties/security / cleanup / flush 请求映射
+- [x] 增加对应单测并更新 README / Iter 31 文档说明
+
+## Iter 32 — Windows 主机真实 Explorer 验证记录 + 安装包实机闭环
+- [x] 新增 Windows host validation record 模板生成逻辑与单测
+- [x] diagnostics zip 导出 validation template（Markdown / JSON）
+- [x] release / installer 脚本增加 validation template 与实机闭环材料
+- [x] 新增 Iter 32 文档说明与 README 更新

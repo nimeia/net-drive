@@ -13,6 +13,7 @@ import (
 
 	"developer-mount/internal/winclient"
 	"developer-mount/internal/winclientrecovery"
+	"developer-mount/internal/winclientrelease"
 	"developer-mount/internal/winclientruntime"
 	"developer-mount/internal/winclientsmoke"
 	"developer-mount/internal/winfsp"
@@ -355,6 +356,17 @@ func Export(path string, report Report) (string, error) {
 		if err := writeZipEntry(zw, "recovery.json", append(recoveryPayload, '\n')); err != nil {
 			return "", err
 		}
+	}
+	validation := winclientrelease.NewHostValidationRecord("", report.SmokeScenarios, report.CallbackTable, report.ExplorerMatrix)
+	if err := writeZipEntry(zw, "windows-host-validation-template.md", []byte(validation.Markdown())); err != nil {
+		return "", err
+	}
+	validationPayload, err := validation.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-host-validation-template.json", append(validationPayload, '\n')); err != nil {
+		return "", err
 	}
 	if err := zw.Close(); err != nil {
 		return "", fmt.Errorf("close diagnostics zip: %w", err)

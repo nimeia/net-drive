@@ -12,7 +12,7 @@ func runHost(ctx context.Context, h *Host) error {
 		return fmt.Errorf("winfsp mount point is required")
 	}
 	binding, err := Probe(h.config)
-	h.binding = binding
+	h.SetBinding(binding)
 	if err != nil {
 		return err
 	}

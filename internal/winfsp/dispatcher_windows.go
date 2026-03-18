@@ -51,11 +51,22 @@ func probeDispatcherBindings(dllPath string) (dispatcherBindings, error) {
 	}
 	return dispatcherBindings{create: create, setMountPoint: setMountPoint, startDispatcher: startDispatcher, stopDispatcher: stopDispatcher, deleteFS: deleteFS}, nil
 }
-
 func runDispatcherHostV1(ctx context.Context, h *Host) error {
 	if !h.binding.DispatcherReady {
 		return fmt.Errorf("dispatcher-v1 requested but dispatcher APIs are not ready")
 	}
+	bridge := h.DispatcherBridge()
+	if bridge == nil {
+		return fmt.Errorf("dispatcher-v1 requested but dispatcher bridge is not initialized")
+	}
+	if err := bridge.Initialize("/"); err != nil {
+		h.binding.DispatcherStatus = fmt.Sprintf("dispatcher bridge init failed: %v", err)
+		return err
+	}
+	state := bridge.Snapshot()
+	h.binding.DispatcherStatus = state.Summary()
 	<-ctx.Done()
+	state = bridge.Snapshot()
+	h.binding.DispatcherStatus = state.Summary() + " stopped"
 	return nil
 }

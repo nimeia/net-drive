@@ -202,3 +202,21 @@
 - [x] 为 dispatcher backend 摘要与 Config 增加单测
 - [x] 更新 README 与 Iter 24 dispatcher host 第一版文档说明
 
+
+
+## Iter 25 — 错误码 / 日志模型 / 自检结果分级与诊断页增强
+- [x] 把 winclientlog 升级为结构化日志模型，支持 level / code / component / fields
+- [x] 为 diagnostics checks 增加 code / category / severity / remediation
+- [x] 生成 diagnostics summary（pass/warn/fail + overall severity）
+- [x] WinFsp status 输出统一的 StatusName / StatusCode / StatusError
+- [x] Diagnostics 文本输出增强到可直接用于排障工单
+- [x] 为日志模型、自检分级和错误码补跨平台单测
+- [x] 更新 README 与 Iter 25 文档说明
+
+## Iter 26 — 完整 WinFsp dispatcher 回调桥第一版
+- [x] 新增 internal/winfsp DispatcherBridge，承接 volume / getattr / open / opendir / readdir / read / close
+- [x] host 持有 dispatcher bridge，并把 bridge 摘要接入 binding/runtime 可见状态
+- [x] dispatcher-v1 host 运行前执行 bridge warmup（GetVolumeInfo + root GetFileInfo）
+- [x] 为 callback bridge 增加 synthetic 单测，覆盖初始化、调用计数和失败状态
+- [x] Windows 交叉编译验证 devmount-client-win32 与 devmount-winfsp
+- [x] 更新 README 与 Iter 26 文档说明

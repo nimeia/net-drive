@@ -77,6 +77,8 @@ type Builder interface {
 }
 type Host interface {
 	Config() winfsp.HostConfig
+	Binding() winfsp.BindingInfo
+	SetBinding(binding winfsp.BindingInfo)
 	Run(ctx context.Context) error
 }
 type HostFactory func(config winfsp.HostConfig, adapter *adapterpkg.Adapter) Host
@@ -216,8 +218,10 @@ func (b DefaultBuilder) Build(config winclient.Config) (Session, error) {
 	if err != nil {
 		return nil, err
 	}
+	host.SetBinding(binding)
+	hostBinding := host.Binding()
 	cleanup = false
-	return defaultSession{client: cli, host: host, info: SessionInfo{ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, SessionID: sessionResp.SessionID, PrincipalID: authResp.PrincipalID, ServerName: helloResp.ServerName, ServerVersion: helloResp.ServerVersion, ExpiresAt: sessionResp.ExpiresAt, RequestedBackend: binding.RequestedBackend, HostBackend: binding.EffectiveBackend, HostDLLPath: binding.DLLPath, HostLauncherPath: binding.LauncherPath, HostBindingStatus: binding.Summary(), HostDispatcherState: binding.DispatcherStatus}}, nil
+	return defaultSession{client: cli, host: host, info: SessionInfo{ServerAddr: config.Addr, MountPoint: config.MountPoint, VolumePrefix: config.VolumePrefix, RemotePath: config.Path, ClientInstanceID: config.ClientInstanceID, SessionID: sessionResp.SessionID, PrincipalID: authResp.PrincipalID, ServerName: helloResp.ServerName, ServerVersion: helloResp.ServerVersion, ExpiresAt: sessionResp.ExpiresAt, RequestedBackend: hostBinding.RequestedBackend, HostBackend: hostBinding.EffectiveBackend, HostDLLPath: hostBinding.DLLPath, HostLauncherPath: hostBinding.LauncherPath, HostBindingStatus: hostBinding.Summary(), HostDispatcherState: hostBinding.DispatcherStatus}}, nil
 }
 
 type defaultSession struct {

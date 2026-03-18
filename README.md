@@ -28,7 +28,7 @@ The current code implements:
 - WinFsp-facing read-only mount core: Windows path normalization, mountcore path/handle orchestration, callback bridge, and Windows-tagged host shell
 
 It does not yet implement:
-- full WinFsp SDK dispatcher glue and real Explorer-served Windows-host smoke logs (callback bridge, tray shell, diagnostics export, and WinFsp native preflight / dispatcher-v1 backend scaffold now exist)
+- full WinFsp SDK dispatcher ABI glue, production Explorer-served Windows-host smoke logs, and full Windows file semantic coverage (callback bridge v1, tray shell, structured diagnostics, and WinFsp native preflight / dispatcher-v1 backend now exist)
 - push-style watcher streaming
 - lease / oplock-style invalidation
 - full Windows file semantic coverage
@@ -122,7 +122,7 @@ go build -ldflags="-H windowsgui" -o .\dist\devmount-client-win32.exe .\cmd\devm
 
 The Win32 client now has a product-shaped shell with `Dashboard / Profiles / Diagnostics` pages. Profiles stores named connection and mount defaults under the user config directory, Dashboard surfaces the live mount runtime state machine and mount quick actions, and Diagnostics keeps the advanced `volume|getattr|readdir|read|materialize` smoke tools plus CLI previews. Closing or minimizing the window keeps the client alive in the notification area, where the tray menu can reopen pages, start or stop the mount runtime, and export diagnostics. The `materialize` flow still recursively downloads the remote tree into a local folder so you can inspect it with Explorer, VS Code, or other Windows tools.
 
-The Windows client now also writes a local product log, can run a built-in self-check, and can export a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher-v1 scaffold state in the UI and diagnostics output.
+The Windows client now also writes a structured local product log, runs a graded self-check, and exports a diagnostics ZIP with text/JSON summaries plus recent log tail content. On Windows, the mount runtime performs a real WinFsp host-binding preflight: it discovers the WinFsp DLL, records the launcher path when present, calls the native `FspFileSystemPreflight` API for the requested mount point, and reports both requested/effective backend plus dispatcher bridge state in the UI and diagnostics output. Dispatcher-v1 now includes a first callback bridge that warms up volume + root getattr paths before entering the host lifecycle.
 
 Windows-only host shell compile check:
 
@@ -188,3 +188,6 @@ go run ./cmd/devmount-client
 - Iter 22 WinFsp binding preflight in mount runtime: `docs/architecture/windows-winfsp-binding-runtime.md`
 - Iter 23 Windows client logs / self-check / diagnostics export: `docs/architecture/windows-client-diagnostics.md`
 - Iter 24 WinFsp dispatcher host v1 scaffold: `docs/architecture/windows-winfsp-dispatcher-v1.md`
+
+- Iter 25 Windows diagnostics grading / structured logs: `docs/architecture/windows-client-diagnostics-v2.md`
+- Iter 26 WinFsp dispatcher callback bridge v1: `docs/architecture/windows-winfsp-dispatcher-bridge-v1.md`

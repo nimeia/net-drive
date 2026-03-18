@@ -219,6 +219,24 @@ This produces an EXE staging bundle, a WiX-based MSI source/output directory, a 
 - Iter 33 WinFsp native security descriptor / cleanup / delete-on-close semantics: `docs/architecture/windows-winfsp-native-security-delete-semantics.md`
 - Iter 34 Windows host validation backfill / installer closure: `docs/architecture/windows-host-validation-backfill-installer-closure.md`
 
+- Iter 35 final native callback matrix: `docs/architecture/windows-winfsp-native-callback-matrix-final.md`
+- Iter 36 final Windows release closure: `docs/architecture/windows-release-final-closure.md`
+- Iter 37 Windows host first-pass backfill: `docs/architecture/windows-host-first-pass-backfill.md`
+- Iter 38 pre-release issues pipeline: `docs/architecture/windows-pre-release-issues.md`
+- Iter 39 first-pass fixes intake/fix-plan: `docs/architecture/windows-host-first-pass-fixes.md`
+- Iter 40 release candidate finalization: `docs/architecture/windows-release-rc-finalization.md`
+- Iter 41 Windows host targeted fixes intake: `docs/architecture/windows-host-targeted-fixes.md`
+- Iter 42 final release closure and signoff: `docs/architecture/windows-final-release-closure.md`
+
+Windows final release packaging:
+
+```powershell
+./scripts/finalize-windows-release.ps1 -ReleaseDir .\dist\windows-release -ValidationResultJson .\dist\windows-release\windows-host-validation-result-template.json -CompletedBy "<tester>"
+./scripts/package-windows-final.ps1 -ReleaseDir .\dist\windows-release
+```
+
+This now produces a validation intake report, final release status, and sign-off template alongside the RC metadata.
+
 
 Finalize Windows release closure after backfilling the host validation result:
 

@@ -23,18 +23,21 @@ type Manifest struct {
 	ExplorerMatrixSummary string                    `json:"explorer_matrix_summary"`
 	ValidationTemplate    string                    `json:"validation_template,omitempty"`
 	ValidationResult      string                    `json:"validation_result,omitempty"`
+	ValidationIntake      string                    `json:"validation_intake,omitempty"`
 	BackfillPatch         string                    `json:"backfill_patch,omitempty"`
 	ReleaseClosure        string                    `json:"release_closure,omitempty"`
 	IssueList             string                    `json:"issue_list,omitempty"`
 	FixPlan               string                    `json:"fix_plan,omitempty"`
 	ReleaseCandidate      string                    `json:"release_candidate,omitempty"`
+	FinalRelease          string                    `json:"final_release,omitempty"`
+	FinalSignoff          string                    `json:"final_signoff,omitempty"`
 	FinalStatus           string                    `json:"final_status,omitempty"`
 	InstallerResults      []string                  `json:"installer_results,omitempty"`
 	SmokeScenarios        []winclientsmoke.Scenario `json:"smoke_scenarios,omitempty"`
 }
 
 func NewManifest(version string, artifacts []Artifact, table winfsp.NativeCallbackTable, matrix winclientsmoke.RequestMatrix, smoke []winclientsmoke.Scenario) Manifest {
-	return Manifest{PackageName: "developer-mount-windows-client", Version: strings.TrimSpace(version), Artifacts: artifacts, NativeCallbackSummary: table.Summary(), ExplorerMatrixSummary: matrix.Summary(), ValidationTemplate: "windows-host-validation-template.json", ValidationResult: "windows-host-validation-result-template.json", BackfillPatch: "windows-host-backfill-patch-template.json", ReleaseClosure: "windows-release-closure.json", IssueList: "windows-pre-release-issues.json", FixPlan: "windows-first-pass-fix-plan.json", ReleaseCandidate: "windows-release-candidate.json", FinalStatus: "needs-validation", InstallerResults: []string{"msi-install", "msi-upgrade", "msi-uninstall", "exe-portable-launch"}, SmokeScenarios: smoke}
+	return Manifest{PackageName: "developer-mount-windows-client", Version: strings.TrimSpace(version), Artifacts: artifacts, NativeCallbackSummary: table.Summary(), ExplorerMatrixSummary: matrix.Summary(), ValidationTemplate: "windows-host-validation-template.json", ValidationResult: "windows-host-validation-result-template.json", ValidationIntake: "windows-validation-intake-report.json", BackfillPatch: "windows-host-backfill-patch-template.json", ReleaseClosure: "windows-release-closure.json", IssueList: "windows-pre-release-issues.json", FixPlan: "windows-first-pass-fix-plan.json", ReleaseCandidate: "windows-release-candidate.json", FinalRelease: "windows-final-release.json", FinalSignoff: "windows-final-signoff.md", FinalStatus: "needs-validation", InstallerResults: []string{"msi-install", "msi-upgrade", "msi-uninstall", "exe-portable-launch"}, SmokeScenarios: smoke}
 }
 func (m Manifest) JSON() ([]byte, error) { return json.MarshalIndent(m, "", "  ") }
 func (m Manifest) MarkdownChecklist() string {

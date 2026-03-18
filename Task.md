@@ -325,3 +325,16 @@
 - [x] 新增 package-windows-rc.ps1，生成 windows-rc 目录
 - [x] release manifest 增加 fix plan / release candidate 路径
 - [x] 更新 README 与 Iter 40 文档说明
+
+## Iter 41 — 基于你本地回填的首轮 Windows 结果做定点修复
+- [x] 新增 ValidationIntakeReport，显式判断真实 Windows 主机回填结果是否足以支撑定点修复
+- [x] finalize-windows-release.ps1 新增 intake report 输出
+- [x] diagnostics / release 产物新增 intake report
+- [x] 为 intake report 增加单测
+
+## Iter 42 — RC 问题清零与正式发布包收口
+- [x] 新增 FinalRelease，汇总 manifest / validation / intake / closure / issues / RC 为正式发布判定
+- [x] 新增 windows-final-signoff.md 输出
+- [x] 新增 package-windows-final.ps1，生成 windows-final 聚合目录
+- [x] diagnostics / release 产物新增 final release / signoff 模板
+- [x] 更新 README 与 Iter 41/42 文档说明

@@ -411,6 +411,17 @@ Update the matching JSON file with first-pass Windows host results, then merge i
 	if err := writeZipEntry(zw, "windows-pre-release-issues.json", append(issuePayload, byte(10))); err != nil {
 		return "", err
 	}
+	intake := winclientrelease.NewValidationIntakeReport(manifest, validation)
+	if err := writeZipEntry(zw, "windows-validation-intake-report.md", []byte(intake.Markdown())); err != nil {
+		return "", err
+	}
+	intakePayload, err := intake.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-validation-intake-report.json", append(intakePayload, byte(10))); err != nil {
+		return "", err
+	}
 	fixPlan := winclientrelease.NewFirstPassFixPlan(manifest, validation, issues)
 	if err := writeZipEntry(zw, "windows-first-pass-fix-plan.md", []byte(fixPlan.Markdown())); err != nil {
 		return "", err
@@ -431,6 +442,20 @@ Update the matching JSON file with first-pass Windows host results, then merge i
 		return "", err
 	}
 	if err := writeZipEntry(zw, "windows-release-candidate.json", append(rcPayload, byte(10))); err != nil {
+		return "", err
+	}
+	finalRelease := winclientrelease.NewFinalRelease(manifest, validation, intake, closure, issues, rc)
+	if err := writeZipEntry(zw, "windows-final-release.md", []byte(finalRelease.Markdown())); err != nil {
+		return "", err
+	}
+	finalPayload, err := finalRelease.JSON()
+	if err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-final-release.json", append(finalPayload, byte(10))); err != nil {
+		return "", err
+	}
+	if err := writeZipEntry(zw, "windows-final-signoff.md", []byte(finalRelease.SignoffMarkdown())); err != nil {
 		return "", err
 	}
 	if err := zw.Close(); err != nil {

@@ -118,4 +118,105 @@ Release ready: $ready
 Open issues: $($issues.Count)
 Artifacts: $((@($manifest.artifacts)).Count)
 "@ | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir "windows-release-candidate.md")
-Write-Host "Wrote release closure, issue list, fix plan, and RC outputs to $ReleaseDir"
+
+$missingEvidence = New-Object System.Collections.Generic.List[object]
+if (-not $validation.completed_at) { $missingEvidence.Add([ordered]@{ key = 'completed_at'; status = 'missing'; remediation = 'Mark the validation result completed after the Windows-host run is fully backfilled.' }) }
+if (-not $validation.environment.machine) { $missingEvidence.Add([ordered]@{ key = 'environment.machine'; status = 'missing'; remediation = 'Capture the Windows host machine name used for validation.' }) }
+if (-not $validation.environment.os_version) { $missingEvidence.Add([ordered]@{ key = 'environment.os_version'; status = 'missing'; remediation = 'Capture the exact Windows build used for validation.' }) }
+if (-not $validation.environment.winfsp_version) { $missingEvidence.Add([ordered]@{ key = 'environment.winfsp_version'; status = 'missing'; remediation = 'Capture the WinFsp version from the validation host.' }) }
+if (-not $validation.environment.diagnostics_bundle) { $missingEvidence.Add([ordered]@{ key = 'environment.diagnostics_bundle'; status = 'missing'; remediation = 'Attach the exported diagnostics ZIP produced after the Explorer and installer validation runs.' }) }
+if (-not $validation.environment.installer_log_dir) { $missingEvidence.Add([ordered]@{ key = 'environment.installer_log_dir'; status = 'missing'; remediation = 'Archive the MSI/EXE installer logs and record the directory path.' }) }
+foreach ($item in @($validation.installer_runs)) {
+  if (-not $item.log_path) {
+    $missingEvidence.Add([ordered]@{ key = "installer_runs.$($item.channel).$($item.action).log_path"; status = 'missing'; remediation = 'Capture the installer log path for each real Windows-host installer run.' })
+  }
+}
+$pendingScenarios = @(@($validation.explorer_scenarios) | Where-Object status -ne 'pass' | ForEach-Object { "$($_.scenario_id) ($($_.status))" })
+$pendingInstallerRuns = @(@($validation.installer_runs) | Where-Object status -ne 'pass' | ForEach-Object { "$($_.channel)/$($_.action) ($($_.status))" })
+$pendingChecklist = @()
+$pendingChecklist += @(@($validation.installer_checklist) | Where-Object status -ne 'pass' | ForEach-Object { "installer: $($_.item) ($($_.status))" })
+$pendingChecklist += @(@($validation.recovery_checklist) | Where-Object status -ne 'pass' | ForEach-Object { "recovery: $($_.item) ($($_.status))" })
+$intakeReady = ($missingEvidence.Count -eq 0 -and $validation.completed_at)
+$intake = [ordered]@{
+  generated_at = (Get-Date).ToUniversalTime().ToString('s') + 'Z'
+  version = $version
+  completed = [bool]$validation.completed_at
+  validation_overall = $validation.summary.overall
+  ready_for_targeted_fix = [bool]$intakeReady
+  missing_evidence_count = $missingEvidence.Count
+  open_scenario_count = $pendingScenarios.Count
+  open_installer_runs = $pendingInstallerRuns.Count
+  open_checklist_items = $pendingChecklist.Count
+  evidence = @($missingEvidence)
+  pending_scenarios = @($pendingScenarios)
+  pending_installer_runs = @($pendingInstallerRuns)
+  pending_checklist = @($pendingChecklist)
+}
+$intake | ConvertTo-Json -Depth 16 | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir 'windows-validation-intake-report.json')
+@"
+# Windows Validation Intake Report
+
+Version: $version
+Completed: $([bool]$validation.completed_at)
+Validation overall: $($validation.summary.overall)
+Ready for targeted fix: $([bool]$intakeReady)
+Missing evidence: $($missingEvidence.Count)
+Open explorer scenarios: $($pendingScenarios.Count)
+Open installer runs: $($pendingInstallerRuns.Count)
+Open checklist items: $($pendingChecklist.Count)
+"@ | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir 'windows-validation-intake-report.md')
+
+$finalStatus = if ($ready -and $issues.Count -eq 0 -and $validation.summary.overall -eq 'pass' -and $intakeReady -and $status -eq 'rc-ready') { 'publish-ready' } elseif ($issues.Count -gt 0 -or $validation.summary.overall -eq 'warn' -or $missingEvidence.Count -gt 0) { 'needs-attention' } else { 'blocked' }
+$publishReady = ($finalStatus -eq 'publish-ready')
+$finalRelease = [ordered]@{
+  generated_at = (Get-Date).ToUniversalTime().ToString('s') + 'Z'
+  version = $version
+  channel = 'stable'
+  release_ready = $ready
+  publish_ready = $publishReady
+  final_status = $finalStatus
+  validation_overall = $validation.summary.overall
+  open_issues = $issues.Count
+  missing_evidence_count = $missingEvidence.Count
+  manifest_path = 'release-manifest.json'
+  validation_path = 'windows-host-validation-result-template.json'
+  intake_path = 'windows-validation-intake-report.json'
+  closure_path = 'windows-release-closure.json'
+  issue_list_path = 'windows-pre-release-issues.json'
+  fix_plan_path = 'windows-first-pass-fix-plan.json'
+  rc_path = 'windows-release-candidate.json'
+  closure_reasons = @($reasons)
+}
+$finalRelease | ConvertTo-Json -Depth 16 | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir 'windows-final-release.json')
+@"
+# Windows Final Release
+
+Version: $version
+Channel: stable
+Final status: $finalStatus
+Release ready: $ready
+Publish ready: $publishReady
+Validation overall: $($validation.summary.overall)
+Open issues: $($issues.Count)
+Missing evidence: $($missingEvidence.Count)
+"@ | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir 'windows-final-release.md')
+@"
+# Windows Final Release Sign-Off
+
+Version: $version
+Final status: $finalStatus
+Publish ready: $publishReady
+
+## Release gates
+- [ ] Validation overall is PASS ($($validation.summary.overall))
+- [ ] Open issue count is zero ($($issues.Count))
+- [ ] Missing evidence count is zero ($($missingEvidence.Count))
+- [ ] Release closure is ready ($ready)
+- [ ] Final release is publish-ready ($publishReady)
+
+## Signatures
+- Engineering: ____________________  Date: __________
+- QA / Windows Host Validation: ____  Date: __________
+- Release / Packaging: _____________  Date: __________
+"@ | Set-Content -Encoding UTF8 (Join-Path $ReleaseDir 'windows-final-signoff.md')
+Write-Host "Wrote release closure, intake report, issue list, fix plan, RC, and final release outputs to $ReleaseDir"

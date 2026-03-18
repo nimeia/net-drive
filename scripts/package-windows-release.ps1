@@ -22,11 +22,14 @@ $manifest = [ordered]@{
   )
   validation_template = "windows-host-validation-template.json"
   validation_result = "windows-host-validation-result-template.json"
+  validation_intake = "windows-validation-intake-report.json"
   backfill_patch = "windows-host-backfill-patch-template.json"
   release_closure = "windows-release-closure.json"
   issue_list = "windows-pre-release-issues.json"
   fix_plan = "windows-first-pass-fix-plan.json"
   release_candidate = "windows-release-candidate.json"
+  final_release = "windows-final-release.json"
+  final_signoff = "windows-final-signoff.md"
   final_status = "needs-validation"
 }
 $manifest | ConvertTo-Json -Depth 16 | Set-Content -Encoding UTF8 (Join-Path $release "release-manifest.json")
@@ -50,7 +53,7 @@ Version: $Version
 - Export diagnostics after smoke and archive the bundle.
 - Apply windows-host-backfill-patch-template.json after each validation round.
 - Merge windows-installer-results-template.json after each install/upgrade/uninstall round.
-- Regenerate closure, issue list, fix plan, and RC outputs after each backfill.
+- Regenerate intake, closure, issue list, fix plan, RC, and final release outputs after each backfill.
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "release-validation.md")
 
 @"
@@ -274,3 +277,68 @@ Channel: rc
 Final status: needs-validation
 "@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-release-candidate-template.md")
 Write-Host "Prepared Windows release assets at $release"
+
+@"
+{
+  "version": "$Version",
+  "completed": false,
+  "validation_overall": "not-run",
+  "ready_for_targeted_fix": false,
+  "missing_evidence_count": 1,
+  "open_scenario_count": 1,
+  "open_installer_runs": 1,
+  "open_checklist_items": 1,
+  "evidence": [
+    {
+      "key": "environment.machine",
+      "status": "missing",
+      "remediation": "Capture the Windows host machine name used for validation."
+    }
+  ]
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-validation-intake-template.json")
+@"
+# Windows Validation Intake Template
+
+Version: $Version
+Ready for targeted fix: false
+Missing evidence: 1
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-validation-intake-template.md")
+
+@"
+{
+  "version": "$Version",
+  "channel": "stable",
+  "release_ready": false,
+  "publish_ready": false,
+  "final_status": "blocked",
+  "validation_overall": "not-run",
+  "open_issues": 1,
+  "missing_evidence_count": 1
+}
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-final-release-template.json")
+@"
+# Windows Final Release Template
+
+Version: $Version
+Channel: stable
+Final status: blocked
+Publish ready: false
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-final-release-template.md")
+@"
+# Windows Final Release Sign-Off Template
+
+Version: $Version
+
+## Release gates
+- [ ] Validation overall is PASS
+- [ ] Open issue count is zero
+- [ ] Missing evidence count is zero
+- [ ] Release closure is ready
+- [ ] Final release is publish-ready
+
+## Signatures
+- Engineering: ____________________  Date: __________
+- QA / Windows Host Validation: ____  Date: __________
+- Release / Packaging: _____________  Date: __________
+"@ | Set-Content -Encoding UTF8 (Join-Path $release "windows-final-signoff-template.md")

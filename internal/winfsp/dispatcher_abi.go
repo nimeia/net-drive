@@ -13,14 +13,14 @@ type ABIVolumeInfo struct {
 type ABIFileInfo struct {
 	Path        string
 	NodeID      uint64
-	Size        uint64
+	Size        int64
 	Mode        uint32
 	IsDirectory bool
 }
 type ABIDirectoryEntry struct {
 	Path        string
 	NodeID      uint64
-	Size        uint64
+	Size        int64
 	IsDirectory bool
 }
 type DispatcherABIState struct {

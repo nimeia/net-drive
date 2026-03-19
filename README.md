@@ -164,6 +164,36 @@ In another terminal, run the demo client:
 go run ./cmd/devmount-client
 ```
 
+## Stress suite
+
+Use the packaged stress wrapper to rerun the same pressure paths exercised in the sandbox:
+
+```bash
+./scripts/run-stress-suite.sh
+```
+
+Quick wrapper self-check without the full long run:
+
+```bash
+INTEGRATION_REPEAT=1 MIXED_REPEAT=1 RUN_BENCH=0 ./scripts/run-stress-suite.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+./scripts/run-stress-suite.ps1
+```
+
+The wrapper writes raw logs to `dist/stress/` and covers:
+
+- mixed browse/save/watch pressure
+- concurrent create/write/rename/watch
+- heartbeat interleaved with file operations
+- repeated disconnect/resume/read
+- metadata backend benchmarks
+
+Current result summary and interpretation: `docs/architecture/test-report-iter43-stress-suite.md`
+
 ## Focused reports
 
 - Iter 6 recovery matrix: `docs/architecture/test-report-iter6-recovery-matrix.md`

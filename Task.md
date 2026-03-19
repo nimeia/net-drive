@@ -338,3 +338,10 @@
 - [x] 新增 package-windows-final.ps1，生成 windows-final 聚合目录
 - [x] diagnostics / release 产物新增 final release / signoff 模板
 - [x] 更新 README 与 Iter 41/42 文档说明
+
+
+## Iter 43 — 压测脚本整理与压力回归入口
+- [x] 新增 Linux/macOS `scripts/run-stress-suite.sh`
+- [x] 新增 Windows `scripts/run-stress-suite.ps1`
+- [x] 将 integration 压力组合 / mixed workload repeat / metadata benchmark 固化为可复用入口
+- [x] 产出 Iter 43 压测脚本与首轮结果文档

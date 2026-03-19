@@ -4,6 +4,7 @@ package winfsp
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -233,6 +234,13 @@ func winfspMountPointForAPI(mountPoint string) string {
 	return strings.TrimSpace(mountPoint)
 }
 
+func isLocalDirectoryMountPoint(mountPoint string) bool {
+	return len(mountPoint) >= 3 &&
+		((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) &&
+		mountPoint[1] == ':' &&
+		(mountPoint[2] == '\\' || mountPoint[2] == '/')
+}
+
 func (h *nativeMountHandle) Start() error {
 	if h.fs == 0 {
 		return fmt.Errorf("native file system is not created")
@@ -249,15 +257,29 @@ func (h *nativeMountHandle) Start() error {
 	}
 	status, _, _ := h.bindings.setMountPoint.Call(h.fs, mountPtr)
 	if NTStatus(status) != StatusSuccess {
-		nativeTraceError("native.start.set_mount_point_failed", "FspFileSystemSetMountPoint failed", map[string]string{"mount_point": h.config.MountPoint, "ntstatus": fmt.Sprintf("0x%08x", uint32(status)), "status_name": StatusName(NTStatus(status))})
-		return fmt.Errorf("FspFileSystemSetMountPoint(%s) failed with ntstatus=0x%08x", h.config.MountPoint, uint32(status))
+		msg := fmt.Sprintf("FspFileSystemSetMountPoint(%s) failed with ntstatus=0x%08x", h.config.MountPoint, uint32(status))
+		mount := strings.TrimSpace(h.config.MountPoint)
+		if isLocalDirectoryMountPoint(mount) {
+			switch NTStatus(status) {
+			case 0xC0000035:
+				msg += fmt.Sprintf(" (directory mount point %q already exists; WinFsp expects the final mount leaf to not exist, try a child path such as %q)", mount, filepath.Join(mount, "devmount"))
+			case 0xC0000034:
+				msg += fmt.Sprintf(" (directory mount point parent %q does not exist)", filepath.Dir(mount))
+			}
+		}
+		nativeTraceError("native.start.set_mount_point_failed", "FspFileSystemSetMountPoint failed", map[string]string{"mount_point": h.config.MountPoint, "ntstatus": fmt.Sprintf("0x%08x", uint32(status)), "status_name": StatusName(NTStatus(status)), "error": msg})
+		return fmt.Errorf(msg)
 	}
 	status, _, _ = h.bindings.startDispatcher.Call(h.fs, 0)
 	if NTStatus(status) != StatusSuccess {
 		nativeTraceError("native.start.dispatcher_failed", "FspFileSystemStartDispatcher failed", map[string]string{"mount_point": h.config.MountPoint, "ntstatus": fmt.Sprintf("0x%08x", uint32(status)), "status_name": StatusName(NTStatus(status))})
 		return fmt.Errorf("FspFileSystemStartDispatcher failed with ntstatus=0x%08x", uint32(status))
 	}
-	if err := probeMountedRoot(h.config.MountPoint); err != nil {
+	expectEntries, err := rootDirectoryHasVisibleEntries(h.callbacks)
+	if err != nil {
+		nativeTraceError("native.start.root_snapshot_failed", "failed to snapshot remote root entries before probe", map[string]string{"mount_point": h.config.MountPoint, "error": err.Error()})
+	}
+	if err := probeMountedRoot(h.config.MountPoint, expectEntries); err != nil {
 		nativeTraceError("native.start.root_probe_failed", "mounted root probe failed", map[string]string{"mount_point": h.config.MountPoint, "error": err.Error()})
 		return err
 	}
@@ -777,7 +799,7 @@ type win32FindData struct {
 	AlternateFileName [14]uint16
 }
 
-func probeMountedRoot(mountPoint string) error {
+func probeMountedRoot(mountPoint string, expectEntries bool) error {
 	probePath := strings.TrimSpace(mountPoint)
 	if probePath == "" {
 		return nil
@@ -800,7 +822,7 @@ func probeMountedRoot(mountPoint string) error {
 			return nil
 		}
 		if errno, ok := callErr.(syscall.Errno); ok {
-			if errno == 2 || errno == 18 {
+			if (errno == 2 || errno == 18) && !expectEntries {
 				return nil
 			}
 			lastErr = errno
@@ -811,6 +833,27 @@ func probeMountedRoot(mountPoint string) error {
 		lastErr = 1359
 	}
 	return fmt.Errorf("mount point %s is visible but root enumeration failed with win32=%d", mountPoint, lastErr)
+}
+
+func rootDirectoryHasVisibleEntries(callbacks *Callbacks) (bool, error) {
+	if callbacks == nil {
+		return false, fmt.Errorf("callbacks are not initialized")
+	}
+	handle, status := callbacks.OpenDirectory("/")
+	if status != StatusSuccess {
+		return false, fmt.Errorf("open root directory: %s", StatusName(status))
+	}
+	defer callbacks.Close(handle.HandleID)
+	entries, status := collectDirectoryEntries(callbacks, handle.HandleID)
+	if status != StatusSuccess {
+		return false, fmt.Errorf("read root directory: %s", StatusName(status))
+	}
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Name) != "" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func collectDirectoryEntries(callbacks *Callbacks, handleID uint64) ([]FileInfo, NTStatus) {

@@ -5,6 +5,7 @@ package winclientgui
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"developer-mount/internal/winclient"
@@ -37,6 +38,10 @@ func (a *app) handleCommand(wParam uintptr) {
 			}
 			a.showPage(pageDiagnostics)
 			a.setOutput(winclient.BuildCLIPreview(cfg, winclient.OperationMount))
+		}
+	case idChooseMountDir:
+		if code == bnClicked {
+			a.chooseMountDirectory()
 		}
 	case idRun:
 		if code == bnClicked {
@@ -108,6 +113,19 @@ func (a *app) startMount() {
 		a.setOutput(message)
 		_ = a.logInfo(message)
 	}
+	if prepared, createdParent, err := winclient.PrepareDirectoryMountPoint(cfg.MountPoint, cfg.VolumePrefix); err != nil {
+		a.setOutput("mount start failed: " + err.Error())
+		_ = a.logError("mount directory prepare failed: " + err.Error())
+		return
+	} else {
+		cfg.MountPoint = prepared
+		a.setText(idMountPoint, prepared)
+		if createdParent {
+			message := fmt.Sprintf("created mount parent directory %s before start", filepath.Dir(prepared))
+			a.setOutput(message)
+			_ = a.logInfo(message)
+		}
+	}
 	profile := strings.TrimSpace(a.text(idProfileName))
 	if err := a.runtime.Start(cfg, profile); err != nil {
 		a.setOutput("mount start failed: " + err.Error())
@@ -123,6 +141,23 @@ func (a *app) startMount() {
 	a.showPage(pageDashboard)
 	a.refreshRuntimeViews()
 	message := fmt.Sprintf("mount start requested for %s using backend %s", cfg.MountPoint, cfg.HostBackend)
+	a.setOutput(message)
+	_ = a.logInfo(message)
+}
+
+func (a *app) chooseMountDirectory() {
+	path, ok, err := chooseFolder(a.hwnd, "Select a parent directory for the mount point")
+	if err != nil {
+		a.setOutput("choose mount directory failed: " + err.Error())
+		_ = a.logError("choose mount directory failed: " + err.Error())
+		return
+	}
+	if !ok {
+		return
+	}
+	suggested := winclient.SuggestDirectoryMountPoint(path, a.text(idVolumePrefix))
+	a.setText(idMountPoint, suggested)
+	message := fmt.Sprintf("selected mount parent %s; mount point set to %s", path, suggested)
 	a.setOutput(message)
 	_ = a.logInfo(message)
 }
@@ -267,6 +302,9 @@ func summarizeRuntimeError(err string) string {
 	}
 	if strings.Contains(err, "invalid mount point syntax") {
 		return "invalid mount point; use X: or an existing absolute directory"
+	}
+	if strings.Contains(err, "already exists; WinFsp expects a new mount leaf") {
+		return "directory mount leaf already exists; choose a new child path"
 	}
 	return err
 }

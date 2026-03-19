@@ -68,7 +68,8 @@ func (a *app) initProfileControls(y int) {
 	a.addLabel(pageProfiles, "Client Instance", xLabel, y, 120, rowH)
 	a.addEdit(pageProfiles, idClientInstance, xInput, y, inputW, rowH)
 	a.addLabel(pageProfiles, "Mount Point", rightLabelX, y, 120, rowH)
-	a.addEdit(pageProfiles, idMountPoint, rightInputX, y, rightInputW, rowH)
+	a.addEdit(pageProfiles, idMountPoint, rightInputX, y, rightInputW-104, rowH)
+	a.addButton(pageProfiles, idChooseMountDir, "Choose Parent", rightInputX+rightInputW-112, y-2, 112, 28)
 	y += rowH + gap
 	a.addLabel(pageProfiles, "Volume Prefix", xLabel, y, 120, rowH)
 	a.addEdit(pageProfiles, idVolumePrefix, xInput, y, inputW, rowH)

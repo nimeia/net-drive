@@ -97,6 +97,7 @@ const (
 	idClientInstance
 	idLeaseSeconds
 	idMountPoint
+	idChooseMountDir
 	idVolumePrefix
 	idPath
 	idLocalPath

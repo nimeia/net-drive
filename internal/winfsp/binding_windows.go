@@ -47,7 +47,7 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 	}
 	if shouldSkipNativePreflight(config.MountPoint) {
 		info.PreflightOK = true
-		info.Note = "WinFsp DLL loaded. Native preflight is skipped for drive-letter mount points; syntax and occupancy are validated locally before start."
+		info.Note = "WinFsp DLL loaded. Native preflight is skipped for drive-letter and local directory mount points; syntax and occupancy are validated locally before start."
 	} else {
 		if err := preflightMount(dllPath, config.MountPoint); err != nil {
 			info.PreflightError = err.Error()
@@ -61,7 +61,7 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 	if requested == "auto" && info.DispatcherReady {
 		requested = "dispatcher-v1"
 	}
-	
+
 	switch requested {
 	case "dispatcher-v1":
 		if !info.DispatcherReady {
@@ -231,5 +231,8 @@ func ntStatusHint(status NTStatus, mountPoint string) string {
 
 func shouldSkipNativePreflight(mountPoint string) bool {
 	mountPoint = strings.TrimSpace(mountPoint)
-	return len(mountPoint) == 2 && ((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) && mountPoint[1] == ':'
+	if len(mountPoint) == 2 && ((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) && mountPoint[1] == ':' {
+		return true
+	}
+	return len(mountPoint) >= 3 && ((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) && mountPoint[1] == ':' && (mountPoint[2] == '\\' || mountPoint[2] == '/')
 }

@@ -36,8 +36,11 @@ func TestShouldSkipNativePreflightForDriveLetters(t *testing.T) {
 	if !shouldSkipNativePreflight("Z:") {
 		t.Fatal("shouldSkipNativePreflight(Z:) = false, want true")
 	}
-	if shouldSkipNativePreflight(`C:\mnt\devmount`) {
-		t.Fatal("shouldSkipNativePreflight(directory) = true, want false")
+	if !shouldSkipNativePreflight(`C:\mnt\devmount`) {
+		t.Fatal("shouldSkipNativePreflight(directory) = false, want true")
+	}
+	if shouldSkipNativePreflight(`\\server\share\mount`) {
+		t.Fatal("shouldSkipNativePreflight(UNC) = true, want false")
 	}
 }
 

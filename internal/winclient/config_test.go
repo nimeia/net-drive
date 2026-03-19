@@ -1,6 +1,8 @@
 package winclient
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -86,6 +88,73 @@ func TestResolveMountPointForStartLeavesDirectoryMountPoint(t *testing.T) {
 	}
 	if got != `C:\mnt\devmount` {
 		t.Fatalf("ResolveMountPointForStart(directory) = %q", got)
+	}
+}
+
+func TestPrepareDirectoryMountPointCreatesMissingParentOnly(t *testing.T) {
+	mountDir := filepath.Join(t.TempDir(), "mount", "nested")
+	got, created, err := PrepareDirectoryMountPoint(mountDir, "devmount")
+	if err != nil {
+		t.Fatalf("PrepareDirectoryMountPoint(%q) error = %v", mountDir, err)
+	}
+	if !created {
+		t.Fatal("PrepareDirectoryMountPoint() created = false, want true")
+	}
+	if got != filepath.Clean(mountDir) {
+		t.Fatalf("PrepareDirectoryMountPoint() path = %q, want %q", got, filepath.Clean(mountDir))
+	}
+	info, err := os.Stat(filepath.Dir(mountDir))
+	if err != nil {
+		t.Fatalf("Stat(%q) error = %v", filepath.Dir(mountDir), err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("%q is not a directory", filepath.Dir(mountDir))
+	}
+	if _, err := os.Stat(mountDir); !os.IsNotExist(err) {
+		t.Fatalf("Stat(%q) error = %v, want not exist", mountDir, err)
+	}
+}
+
+func TestPrepareDirectoryMountPointRejectsExistingDirectoryLeaf(t *testing.T) {
+	mountDir := filepath.Join(t.TempDir(), "mount")
+	if err := os.MkdirAll(mountDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll(%q) error = %v", mountDir, err)
+	}
+	if _, _, err := PrepareDirectoryMountPoint(mountDir, "devmount"); err == nil {
+		t.Fatal("PrepareDirectoryMountPoint(existing dir) error = nil, want error")
+	} else if !strings.Contains(err.Error(), `try a child path such as`) {
+		t.Fatalf("PrepareDirectoryMountPoint(existing dir) error = %v, want child-path hint", err)
+	}
+}
+
+func TestPrepareDirectoryMountPointRejectsFile(t *testing.T) {
+	mountPath := filepath.Join(t.TempDir(), "mount.txt")
+	if err := os.WriteFile(mountPath, []byte("x"), 0o644); err != nil {
+		t.Fatalf("WriteFile(%q) error = %v", mountPath, err)
+	}
+	if _, _, err := PrepareDirectoryMountPoint(mountPath, "devmount"); err == nil {
+		t.Fatal("PrepareDirectoryMountPoint(file) error = nil, want error")
+	}
+}
+
+func TestSuggestDirectoryMountPointUsesSelectedParent(t *testing.T) {
+	parent := t.TempDir()
+	got := SuggestDirectoryMountPoint(parent, "Team Mount")
+	want := filepath.Join(parent, "team-mount")
+	if got != want {
+		t.Fatalf("SuggestDirectoryMountPoint(%q) = %q, want %q", parent, got, want)
+	}
+}
+
+func TestSuggestDirectoryMountPointSkipsExistingChild(t *testing.T) {
+	parent := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(parent, "devmount"), 0o755); err != nil {
+		t.Fatalf("MkdirAll(child) error = %v", err)
+	}
+	got := SuggestDirectoryMountPoint(parent, "devmount")
+	want := filepath.Join(parent, "devmount-2")
+	if got != want {
+		t.Fatalf("SuggestDirectoryMountPoint(existing child) = %q, want %q", got, want)
 	}
 }
 

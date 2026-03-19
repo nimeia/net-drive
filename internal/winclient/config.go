@@ -3,6 +3,7 @@ package winclient
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -107,6 +108,53 @@ func ResolveMountPointForStart(value string) (string, bool) {
 		return next, true
 	}
 	return value, false
+}
+
+func SuggestDirectoryMountPoint(value, leafHint string) string {
+	value = NormalizeMountPoint(value)
+	if !isLocalAbsoluteMountDir(value) {
+		return value
+	}
+	value = filepath.Clean(value)
+	info, err := os.Stat(value)
+	if err == nil && info.IsDir() {
+		return nextAvailableDirectoryMountChild(value, directoryMountLeafHint(leafHint))
+	}
+	return value
+}
+
+func PrepareDirectoryMountPoint(value, leafHint string) (string, bool, error) {
+	value = NormalizeMountPoint(value)
+	if !isLocalAbsoluteMountDir(value) {
+		return value, false, nil
+	}
+	value = filepath.Clean(value)
+	info, err := os.Stat(value)
+	switch {
+	case err == nil:
+		if !info.IsDir() {
+			return value, false, fmt.Errorf("mount point %q exists but is not a directory", value)
+		}
+		suggestion := SuggestDirectoryMountPoint(value, leafHint)
+		return value, false, fmt.Errorf("directory mount point %q already exists; WinFsp expects a new mount leaf, try a child path such as %q", value, suggestion)
+	case !os.IsNotExist(err):
+		return value, false, fmt.Errorf("stat mount point %q: %w", value, err)
+	}
+	parent := filepath.Dir(value)
+	parentInfo, err := os.Stat(parent)
+	switch {
+	case err == nil:
+		if !parentInfo.IsDir() {
+			return value, false, fmt.Errorf("mount point parent %q exists but is not a directory", parent)
+		}
+		return value, false, nil
+	case !os.IsNotExist(err):
+		return value, false, fmt.Errorf("stat mount point parent %q: %w", parent, err)
+	}
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return value, false, fmt.Errorf("create mount point parent %q: %w", parent, err)
+	}
+	return value, true, nil
 }
 
 func (c Config) Normalized() Config {
@@ -227,6 +275,59 @@ func isLikelyAbsoluteMountDir(value string) bool {
 		return true
 	}
 	return strings.HasPrefix(value, `\\`) || strings.HasPrefix(value, `/`)
+}
+
+func isLocalAbsoluteMountDir(value string) bool {
+	return len(value) >= 3 && isAlpha(value[0]) && value[1] == ':' && isPathSeparator(value[2])
+}
+
+func directoryMountLeafHint(value string) string {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "devmount"
+	}
+	var b strings.Builder
+	lastDash := false
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+			lastDash = false
+		case r == '-', r == '_':
+			if !lastDash && b.Len() > 0 {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		default:
+			if !lastDash && b.Len() > 0 {
+				b.WriteByte('-')
+				lastDash = true
+			}
+		}
+	}
+	leaf := strings.Trim(b.String(), "-")
+	if leaf == "" {
+		return "devmount"
+	}
+	return leaf
+}
+
+func nextAvailableDirectoryMountChild(parent, leaf string) string {
+	candidate := filepath.Join(parent, leaf)
+	if !pathExists(candidate) {
+		return candidate
+	}
+	for i := 2; ; i++ {
+		candidate = filepath.Join(parent, fmt.Sprintf("%s-%d", leaf, i))
+		if !pathExists(candidate) {
+			return candidate
+		}
+	}
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 var driveRootExists = func(root string) bool {

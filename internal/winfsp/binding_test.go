@@ -45,8 +45,8 @@ func TestBindingMountRuntimeSupportError(t *testing.T) {
 	if err := (BindingInfo{EffectiveBackend: "winfsp-native-preflight"}).MountRuntimeSupportError(); err == nil {
 		t.Fatal("preflight MountRuntimeSupportError = nil, want error")
 	}
-	if err := (BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1"}).MountRuntimeSupportError(); err == nil {
-		t.Fatal("dispatcher MountRuntimeSupportError = nil, want error")
+	if err := (BindingInfo{EffectiveBackend: "winfsp-dispatcher-v1"}).MountRuntimeSupportError(); err != nil {
+		t.Fatalf("dispatcher MountRuntimeSupportError = %v, want nil", err)
 	}
 	if err := (BindingInfo{EffectiveBackend: ""}).MountRuntimeSupportError(); err != nil {
 		t.Fatalf("empty backend MountRuntimeSupportError = %v, want nil", err)

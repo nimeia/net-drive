@@ -236,5 +236,5 @@ type defaultSession struct {
 func (s defaultSession) Info() SessionInfo { return s.info }
 func (s defaultSession) Run(ctx context.Context) error {
 	defer s.client.Close()
-	return s.host.Run(ctx)
+	return s.client.RunWithHeartbeat(ctx, s.host.Run)
 }

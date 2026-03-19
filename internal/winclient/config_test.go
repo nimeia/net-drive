@@ -104,6 +104,9 @@ func TestNormalizeMountPointCanonicalizesDriveRoots(t *testing.T) {
 	if got := NormalizeMountPoint("m:\\"); got != "M:" {
 		t.Fatalf("NormalizeMountPoint(m:\\\\) = %q, want M:", got)
 	}
+	if got := NormalizeMountPoint("m:\\\\"); got != "M:" {
+		t.Fatalf("NormalizeMountPoint(m:\\\\\\\\) = %q, want M:", got)
+	}
 	if got := NormalizeMountPoint(" m: "); got != "M:" {
 		t.Fatalf("NormalizeMountPoint(\" m: \") = %q, want M:", got)
 	}

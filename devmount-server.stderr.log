@@ -1,0 +1,6 @@
+2026/03/19 11:12:58 devmount status server listening on 127.0.0.1:17891
+2026/03/19 11:12:58 devmount server listening on 127.0.0.1:17890 root=C:\Users\huang\Downloads\developer-mount-win32-product-iter42-37d010c\current
+2026/03/19 11:19:02 decode frame error: read tcp 127.0.0.1:17890->127.0.0.1:52517: wsarecv: An existing connection was forcibly closed by the remote host.
+2026/03/19 11:21:57 decode frame error: read tcp 127.0.0.1:17890->127.0.0.1:65468: wsarecv: An existing connection was forcibly closed by the remote host.
+2026/03/19 11:25:53 decode frame error: read tcp 127.0.0.1:17890->127.0.0.1:49902: wsarecv: An existing connection was forcibly closed by the remote host.
+2026/03/19 11:28:03 decode frame error: read tcp 127.0.0.1:17890->127.0.0.1:51622: wsarecv: An existing connection was forcibly closed by the remote host.

@@ -12,7 +12,7 @@ import (
 	"unsafe"
 )
 
-const winfspDiskDeviceName = `\\Device\\WinFsp.Disk`
+const winfspDiskDeviceName = `WinFsp.Disk`
 
 func probeBinding(config HostConfig) (BindingInfo, error) {
 	requested := normalizeRequestedBackend(config.Backend)
@@ -56,6 +56,12 @@ func probeBinding(config HostConfig) (BindingInfo, error) {
 		info.PreflightOK = true
 		info.Note = "WinFsp DLL loaded and FspFileSystemPreflight succeeded for the requested mount point."
 	}
+
+	// When user asks for "auto", prefer dispatcher-v1 when the dispatcher APIs are available.
+	if requested == "auto" && info.DispatcherReady {
+		requested = "dispatcher-v1"
+	}
+	
 	switch requested {
 	case "dispatcher-v1":
 		if !info.DispatcherReady {
@@ -211,7 +217,13 @@ func preflightMount(dllPath, mountPoint string) error {
 func ntStatusHint(status NTStatus, mountPoint string) string {
 	switch uint32(status) {
 	case 0xc0000033:
-		return fmt.Sprintf(" (WinFsp rejected mount point %q with STATUS_OBJECT_NAME_INVALID)", mountPoint)
+		hint := fmt.Sprintf(" (WinFsp rejected mount point %q with STATUS_OBJECT_NAME_INVALID)", mountPoint)
+		// Common cause: attempting to mount to a drive letter without a trailing "\\".
+		// WinFsp expects a well-formed volume root (e.g. "Z:\\").
+		if len(mountPoint) == 2 && ((mountPoint[0] >= 'a' && mountPoint[0] <= 'z') || (mountPoint[0] >= 'A' && mountPoint[0] <= 'Z')) && mountPoint[1] == ':' {
+			hint += " (try using a path like \"Z:\\\" or a directory mount point)"
+		}
+		return hint
 	default:
 		return ""
 	}

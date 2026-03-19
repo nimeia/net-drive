@@ -130,7 +130,7 @@ func main() {
 		host := winfsp.NewHost(winfsp.HostConfig{MountPoint: cfg.MountPoint, VolumePrefix: cfg.VolumePrefix, Backend: cfg.HostBackend}, adapter)
 		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 		defer stop()
-		if err := host.Run(ctx); err != nil {
+		if err := cli.RunWithHeartbeat(ctx, host.Run); err != nil {
 			log.Fatal(err)
 		}
 	default:

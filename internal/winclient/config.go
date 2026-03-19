@@ -68,12 +68,15 @@ func NormalizeMountPoint(value string) string {
 	value = strings.TrimSpace(value)
 	if len(value) >= 2 && isAlpha(value[0]) && value[1] == ':' {
 		drive := strings.ToUpper(value[:1]) + ":"
-		if len(value) == 2 {
-			return drive
+		// Strip any trailing path separators after the drive letter.
+		// This normalizes values like "Z:\" and "Z:\\\" to "Z:".
+		rest := value[2:]
+		for i := 0; i < len(rest); i++ {
+			if !isPathSeparator(rest[i]) {
+				return value
+			}
 		}
-		if len(value) == 3 && isPathSeparator(value[2]) {
-			return drive
-		}
+		return drive
 	}
 	return value
 }

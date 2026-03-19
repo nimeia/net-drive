@@ -1,6 +1,7 @@
 package winfsp
 
 import (
+	"fmt"
 	"sync"
 
 	"developer-mount/internal/mountcore"
@@ -54,7 +55,9 @@ func (c *Callbacks) GetVolumeInfo() (VolumeInfo, NTStatus) {
 func (c *Callbacks) GetFileInfo(path string) (FileInfo, NTStatus) {
 	info, err := c.adapter.GetFileInfo(path)
 	if err != nil {
-		return FileInfo{}, mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.get_file_info", "adapter GetFileInfo failed", map[string]string{"path": path, "error": err.Error(), "ntstatus": StatusName(status)})
+		return FileInfo{}, status
 	}
 	return info, StatusSuccess
 }
@@ -67,7 +70,9 @@ func (c *Callbacks) Create(path string, isDirectory bool) NTStatus {
 func (c *Callbacks) Open(path string) (OpenResult, NTStatus) {
 	result, err := c.adapter.Open(path)
 	if err != nil {
-		return OpenResult{}, mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.open", "adapter Open failed", map[string]string{"path": path, "error": err.Error(), "ntstatus": StatusName(status)})
+		return OpenResult{}, status
 	}
 	c.trackHandle(result.HandleID, result.Info)
 	return OpenResult{HandleID: result.HandleID, Info: result.Info}, StatusSuccess
@@ -75,7 +80,9 @@ func (c *Callbacks) Open(path string) (OpenResult, NTStatus) {
 func (c *Callbacks) OpenDirectory(path string) (OpenResult, NTStatus) {
 	result, err := c.adapter.OpenDirectory(path)
 	if err != nil {
-		return OpenResult{}, mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.open_directory", "adapter OpenDirectory failed", map[string]string{"path": path, "error": err.Error(), "ntstatus": StatusName(status)})
+		return OpenResult{}, status
 	}
 	c.trackHandle(result.HandleID, result.Info)
 	return OpenResult{HandleID: result.HandleID, Info: result.Info}, StatusSuccess
@@ -89,14 +96,18 @@ func (c *Callbacks) Overwrite(handleID uint64, allocationSize uint64, fileAttrib
 func (c *Callbacks) ReadDirectory(handleID uint64, cookie uint64, maxEntries uint32) (DirectoryPage, NTStatus) {
 	page, err := c.adapter.ReadDirectory(handleID, cookie, maxEntries)
 	if err != nil {
-		return DirectoryPage{}, mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.read_directory", "adapter ReadDirectory failed", map[string]string{"handle_id": fmt.Sprintf("%d", handleID), "cookie": fmt.Sprintf("%d", cookie), "error": err.Error(), "ntstatus": StatusName(status)})
+		return DirectoryPage{}, status
 	}
 	return page, StatusSuccess
 }
 func (c *Callbacks) Read(handleID uint64, offset int64, length uint32) ([]byte, bool, NTStatus) {
 	result, err := c.adapter.Read(handleID, offset, length)
 	if err != nil {
-		return nil, false, mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.read", "adapter Read failed", map[string]string{"handle_id": fmt.Sprintf("%d", handleID), "offset": fmt.Sprintf("%d", offset), "length": fmt.Sprintf("%d", length), "error": err.Error(), "ntstatus": StatusName(status)})
+		return nil, false, status
 	}
 	return result.Data, result.EOF, StatusSuccess
 }
@@ -193,7 +204,9 @@ func (c *Callbacks) SetDeleteOnClose(handleID uint64, enabled bool) NTStatus {
 }
 func (c *Callbacks) Close(handleID uint64) NTStatus {
 	if err := c.adapter.Close(handleID); err != nil {
-		return mapError(err)
+		status := mapError(err)
+		nativeTraceError("callbacks.close", "adapter Close failed", map[string]string{"handle_id": fmt.Sprintf("%d", handleID), "error": err.Error(), "ntstatus": StatusName(status)})
+		return status
 	}
 	c.untrackHandle(handleID)
 	return StatusSuccess

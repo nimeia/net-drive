@@ -1,7 +1,6 @@
 package server
 
 import (
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -17,7 +16,7 @@ type Session struct {
 
 type SessionManager struct {
 	nextID   atomic.Uint64
-	mu       sync.RWMutex
+	mu       observedRWMutex
 	sessions map[uint64]Session
 }
 

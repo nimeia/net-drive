@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -60,7 +59,7 @@ type metadataBackend struct {
 	stats   metadataCacheStats
 	profile workspaceProfile
 
-	mu             sync.RWMutex
+	mu             observedRWMutex
 	nodesByID      map[uint64]nodeRecord
 	nodesByPath    map[string]uint64
 	cursors        map[uint64]dirCursor
@@ -574,11 +573,6 @@ func (b *metadataBackend) cachedNodeInfo(relPath string) (protocol.NodeInfo, boo
 	entry, ok := b.attrCache[relPath]
 	b.mu.RUnlock()
 	if !ok || !b.isFresh(entry.expiresAt) {
-		if ok {
-			b.mu.Lock()
-			delete(b.attrCache, relPath)
-			b.mu.Unlock()
-		}
 		return protocol.NodeInfo{}, false
 	}
 	return entry.info, true
@@ -589,11 +583,6 @@ func (b *metadataBackend) cachedDirSnapshot(nodeID uint64) ([]protocol.DirEntry,
 	snapshot, ok := b.dirSnapshots[nodeID]
 	b.mu.RUnlock()
 	if !ok || !b.isFresh(snapshot.expiresAt) {
-		if ok {
-			b.mu.Lock()
-			delete(b.dirSnapshots, nodeID)
-			b.mu.Unlock()
-		}
 		return nil, false
 	}
 	return snapshot.entries, true
@@ -606,13 +595,7 @@ func (b *metadataBackend) isNegativeCached(relPath string) bool {
 	if !ok {
 		return false
 	}
-	if !b.isFresh(entry.expiresAt) {
-		b.mu.Lock()
-		delete(b.negativeCache, relPath)
-		b.mu.Unlock()
-		return false
-	}
-	return true
+	return b.isFresh(entry.expiresAt)
 }
 
 func (b *metadataBackend) recordNegative(relPath string) {
@@ -752,11 +735,6 @@ func (b *metadataBackend) cachedSmallFileData(relPath string) ([]byte, bool) {
 	entry, ok := b.smallFileCache[relPath]
 	b.mu.RUnlock()
 	if !ok || !b.isFresh(entry.expiresAt) {
-		if ok {
-			b.mu.Lock()
-			delete(b.smallFileCache, relPath)
-			b.mu.Unlock()
-		}
 		return nil, false
 	}
 	return append([]byte(nil), entry.data...), true

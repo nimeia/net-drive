@@ -345,3 +345,13 @@
 - [x] 新增 Windows `scripts/run-stress-suite.ps1`
 - [x] 将 integration 压力组合 / mixed workload repeat / metadata benchmark 固化为可复用入口
 - [x] 产出 Iter 43 压测脚本与首轮结果文档
+
+
+## Iter 44 — runtime snapshot / 锁争用观测 / sampled soak
+- [x] 新增 server runtime snapshot（metadata / sessions / journal）
+- [x] 新增 metadata / session / journal 三组 RW 锁等待观测
+- [x] metadata cache 过期命中路径不再升级写锁删除旧项
+- [x] 新增 `/runtimez` 状态入口
+- [x] 新增 `cmd/devmount-soak` 与 `scripts/run-sampled-soak.{sh,ps1}`
+- [x] 为 runtime snapshot 与 status handler 补单测
+- [ ] 跑完 3~5 分钟 sampled soak 并回填最终报告（沙盒受单次 35s 命令上限影响，当前仓库已具备本地执行入口）

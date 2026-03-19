@@ -297,3 +297,36 @@ Apply a first-pass Windows host backfill patch:
 - Backfill validation: `scripts/backfill-windows-validation.ps1`
 - Finalize release closure / issue list / fix plan / RC: `scripts/finalize-windows-release.ps1`
 - Package RC directory: `scripts/package-windows-rc.ps1`
+
+## Sampled soak with runtime snapshot
+
+Use the sampled soak runner to collect runtime snapshot and metadata lock-wait counters during a 3~5 minute mixed workload run:
+
+```bash
+./scripts/run-sampled-soak.sh
+```
+
+Quick plan / dry-run only:
+
+```bash
+go run ./cmd/devmount-soak -dry-run
+```
+
+On Windows PowerShell:
+
+```powershell
+./scripts/run-sampled-soak.ps1
+```
+
+The runner writes:
+
+- `dist/stress/sampled-soak-samples.csv`
+- `dist/stress/sampled-soak-report.md`
+
+Additional status endpoint:
+
+```bash
+curl http://127.0.0.1:17891/runtimez
+```
+
+The runtime snapshot includes metadata/session/journal counts plus read/write lock wait counters for the server-side RW locks.

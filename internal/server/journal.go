@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -27,7 +26,7 @@ type journalBroker struct {
 	nextSeq     atomic.Uint64
 	nextWatchID atomic.Uint64
 
-	mu      sync.RWMutex
+	mu      observedRWMutex
 	events  []protocol.WatchEvent
 	watches map[uint64]*watchSubscription
 }

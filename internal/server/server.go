@@ -87,7 +87,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	for {
 		header, payload, err := transport.DecodeFrame(conn)
 		if err != nil {
-			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 				log.Printf("decode frame error: %v", err)
 			}
 			return

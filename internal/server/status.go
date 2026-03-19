@@ -17,7 +17,7 @@ type ServerStatus struct {
 	Capabilities     []string `json:"capabilities"`
 }
 
-var DefaultStatusCapabilities = []string{"control", "metadata", "data", "events", "recovery", "workspace-profile", "small-file-cache", "journal-polling"}
+var DefaultStatusCapabilities = []string{"control", "metadata", "data", "events", "recovery", "workspace-profile", "small-file-cache", "journal-polling", "runtime-snapshot", "lock-wait-observer"}
 
 func (s *Server) SnapshotStatus(now time.Time) ServerStatus {
 	root := s.RootPath
@@ -35,6 +35,10 @@ func NewStatusHandler(s *Server) http.Handler {
 	mux.HandleFunc("/status", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(s.SnapshotStatus(time.Now()))
+	})
+	mux.HandleFunc("/runtimez", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(s.SnapshotRuntime(time.Now()))
 	})
 	return mux
 }

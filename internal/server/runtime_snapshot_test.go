@@ -48,7 +48,15 @@ func TestServerSnapshotRuntimeIncludesCountsAndLockSamples(t *testing.T) {
 		t.Fatalf("Ack() error = %v", err)
 	}
 
-	srv := &Server{Backend: backend, SessionManager: sessions, Journal: journal}
+	srv := New("127.0.0.1:9100")
+	srv.Backend = backend
+	srv.SessionManager = sessions
+	srv.Journal = journal
+	srv.Control.observe("hello", 2*time.Millisecond, false)
+	srv.Control.observe("auth", 3*time.Millisecond, true)
+	srv.Control.observe("create_session", time.Millisecond, false)
+	srv.Control.observe("resume_session", 4*time.Millisecond, false)
+	srv.Control.observe("heartbeat", 1500*time.Microsecond, false)
 	snap := srv.SnapshotRuntime(now)
 	if snap.At.IsZero() {
 		t.Fatalf("SnapshotRuntime().At is zero")
@@ -64,5 +72,8 @@ func TestServerSnapshotRuntimeIncludesCountsAndLockSamples(t *testing.T) {
 	}
 	if snap.Metadata.Locks.Read.Acquires == 0 || snap.Sessions.Locks.Read.Acquires == 0 || snap.Journal.Locks.Read.Acquires == 0 {
 		t.Fatalf("lock snapshots missing acquisitions: metadata=%+v sessions=%+v journal=%+v", snap.Metadata.Locks, snap.Sessions.Locks, snap.Journal.Locks)
+	}
+	if snap.Control.Hello.Count != 1 || snap.Control.Auth.Errors != 1 || snap.Control.ResumeSession.Count != 1 || snap.Control.Heartbeat.MaxWait == 0 {
+		t.Fatalf("control snapshot = %+v", snap.Control)
 	}
 }

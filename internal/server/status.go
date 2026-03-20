@@ -17,7 +17,7 @@ type ServerStatus struct {
 	Capabilities     []string `json:"capabilities"`
 }
 
-var DefaultStatusCapabilities = []string{"control", "metadata", "data", "events", "recovery", "workspace-profile", "small-file-cache", "journal-polling", "runtime-snapshot", "lock-wait-observer"}
+var DefaultStatusCapabilities = []string{"control", "metadata", "data", "events", "recovery", "workspace-profile", "small-file-cache", "journal-polling", "runtime-snapshot", "lock-wait-observer", "control-op-latency"}
 
 func (s *Server) SnapshotStatus(now time.Time) ServerStatus {
 	root := s.RootPath

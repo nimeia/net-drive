@@ -36,6 +36,7 @@ type RuntimeSnapshot struct {
 	Metadata MetadataRuntimeSnapshot `json:"metadata"`
 	Sessions SessionRuntimeSnapshot  `json:"sessions"`
 	Journal  JournalRuntimeSnapshot  `json:"journal"`
+	Control  ControlRuntimeSnapshot  `json:"control"`
 }
 
 func (b *metadataBackend) RuntimeSnapshot() MetadataRuntimeSnapshot {
@@ -113,5 +114,6 @@ func (s *Server) SnapshotRuntime(now time.Time) RuntimeSnapshot {
 		Metadata: s.Backend.RuntimeSnapshot(),
 		Sessions: s.SessionManager.RuntimeSnapshot(now),
 		Journal:  s.Journal.RuntimeSnapshot(),
+		Control:  s.Control.Snapshot(),
 	}
 }

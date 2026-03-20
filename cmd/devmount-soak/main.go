@@ -116,6 +116,41 @@ type sample struct {
 	MetadataWriteWaitOver1ms  uint64
 	MetadataWriteTotalWaitNS  uint64
 	MetadataWriteMaxWaitNS    uint64
+	SessionReadAcquires       uint64
+	SessionReadWaitOver50us   uint64
+	SessionReadWaitOver1ms    uint64
+	SessionReadTotalWaitNS    uint64
+	SessionReadMaxWaitNS      uint64
+	SessionWriteAcquires      uint64
+	SessionWriteWaitOver50us  uint64
+	SessionWriteWaitOver1ms   uint64
+	SessionWriteTotalWaitNS   uint64
+	SessionWriteMaxWaitNS     uint64
+	JournalReadAcquires       uint64
+	JournalReadWaitOver50us   uint64
+	JournalReadWaitOver1ms    uint64
+	JournalReadTotalWaitNS    uint64
+	JournalReadMaxWaitNS      uint64
+	JournalWriteAcquires      uint64
+	JournalWriteWaitOver50us  uint64
+	JournalWriteWaitOver1ms   uint64
+	JournalWriteTotalWaitNS   uint64
+	JournalWriteMaxWaitNS     uint64
+	ControlHelloCount         uint64
+	ControlHelloErrors        uint64
+	ControlHelloMaxWaitNS     uint64
+	ControlAuthCount          uint64
+	ControlAuthErrors         uint64
+	ControlAuthMaxWaitNS      uint64
+	ControlCreateCount        uint64
+	ControlCreateErrors       uint64
+	ControlCreateMaxWaitNS    uint64
+	ControlResumeCount        uint64
+	ControlResumeErrors       uint64
+	ControlResumeMaxWaitNS    uint64
+	ControlHeartbeatCount     uint64
+	ControlHeartbeatErrors    uint64
+	ControlHeartbeatMaxWaitNS uint64
 	Errors                    int64
 }
 
@@ -180,7 +215,7 @@ func main() {
 	var errorsSeen atomic.Int64
 	var watchEvents atomic.Int64
 
-	watcher, err := connectClient(addr, "sampled-soak-watcher")
+	watcher, err := connectClient(addr, "sampled-soak-watcher", metrics)
 	must(err)
 	defer watcher.Close()
 	sub, err := watcher.Subscribe(watcher.RootNodeID, true)
@@ -276,6 +311,41 @@ loop:
 				MetadataWriteWaitOver1ms:  snap.Metadata.Locks.Write.WaitOver1ms,
 				MetadataWriteTotalWaitNS:  uint64(snap.Metadata.Locks.Write.TotalWait),
 				MetadataWriteMaxWaitNS:    uint64(snap.Metadata.Locks.Write.MaxWait),
+				SessionReadAcquires:       snap.Sessions.Locks.Read.Acquires,
+				SessionReadWaitOver50us:   snap.Sessions.Locks.Read.WaitOver50us,
+				SessionReadWaitOver1ms:    snap.Sessions.Locks.Read.WaitOver1ms,
+				SessionReadTotalWaitNS:    uint64(snap.Sessions.Locks.Read.TotalWait),
+				SessionReadMaxWaitNS:      uint64(snap.Sessions.Locks.Read.MaxWait),
+				SessionWriteAcquires:      snap.Sessions.Locks.Write.Acquires,
+				SessionWriteWaitOver50us:  snap.Sessions.Locks.Write.WaitOver50us,
+				SessionWriteWaitOver1ms:   snap.Sessions.Locks.Write.WaitOver1ms,
+				SessionWriteTotalWaitNS:   uint64(snap.Sessions.Locks.Write.TotalWait),
+				SessionWriteMaxWaitNS:     uint64(snap.Sessions.Locks.Write.MaxWait),
+				JournalReadAcquires:       snap.Journal.Locks.Read.Acquires,
+				JournalReadWaitOver50us:   snap.Journal.Locks.Read.WaitOver50us,
+				JournalReadWaitOver1ms:    snap.Journal.Locks.Read.WaitOver1ms,
+				JournalReadTotalWaitNS:    uint64(snap.Journal.Locks.Read.TotalWait),
+				JournalReadMaxWaitNS:      uint64(snap.Journal.Locks.Read.MaxWait),
+				JournalWriteAcquires:      snap.Journal.Locks.Write.Acquires,
+				JournalWriteWaitOver50us:  snap.Journal.Locks.Write.WaitOver50us,
+				JournalWriteWaitOver1ms:   snap.Journal.Locks.Write.WaitOver1ms,
+				JournalWriteTotalWaitNS:   uint64(snap.Journal.Locks.Write.TotalWait),
+				JournalWriteMaxWaitNS:     uint64(snap.Journal.Locks.Write.MaxWait),
+				ControlHelloCount:         snap.Control.Hello.Count,
+				ControlHelloErrors:        snap.Control.Hello.Errors,
+				ControlHelloMaxWaitNS:     uint64(snap.Control.Hello.MaxWait),
+				ControlAuthCount:          snap.Control.Auth.Count,
+				ControlAuthErrors:         snap.Control.Auth.Errors,
+				ControlAuthMaxWaitNS:      uint64(snap.Control.Auth.MaxWait),
+				ControlCreateCount:        snap.Control.CreateSession.Count,
+				ControlCreateErrors:       snap.Control.CreateSession.Errors,
+				ControlCreateMaxWaitNS:    uint64(snap.Control.CreateSession.MaxWait),
+				ControlResumeCount:        snap.Control.ResumeSession.Count,
+				ControlResumeErrors:       snap.Control.ResumeSession.Errors,
+				ControlResumeMaxWaitNS:    uint64(snap.Control.ResumeSession.MaxWait),
+				ControlHeartbeatCount:     snap.Control.Heartbeat.Count,
+				ControlHeartbeatErrors:    snap.Control.Heartbeat.Errors,
+				ControlHeartbeatMaxWaitNS: uint64(snap.Control.Heartbeat.MaxWait),
 				Errors:                    errorsSeen.Load(),
 			})
 		}
@@ -319,48 +389,66 @@ func seedWorkspace(root string) {
 	}
 }
 
-func connectClient(addr, clientInstanceID string) (*client.Client, error) {
+func connectClient(addr, clientInstanceID string, metrics *metricStore) (*client.Client, error) {
 	cli := client.New(addr)
 	if err := cli.Connect(); err != nil {
 		return nil, err
 	}
+	started := time.Now()
 	if _, err := cli.Hello(); err != nil {
+		metrics.add("control_hello", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_hello", time.Since(started))
+	started = time.Now()
 	if _, err := cli.Auth("devmount-dev-token"); err != nil {
+		metrics.add("control_auth", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_auth", time.Since(started))
+	started = time.Now()
 	if _, err := cli.CreateSession(clientInstanceID, 300); err != nil {
+		metrics.add("control_create_session", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_create_session", time.Since(started))
 	return cli, nil
 }
 
-func resumeClient(addr string, sessionID uint64, clientInstanceID string) (*client.Client, error) {
+func resumeClient(addr string, sessionID uint64, clientInstanceID string, metrics *metricStore) (*client.Client, error) {
 	cli := client.New(addr)
 	if err := cli.Connect(); err != nil {
 		return nil, err
 	}
+	started := time.Now()
 	if _, err := cli.Hello(); err != nil {
+		metrics.add("control_hello", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_hello", time.Since(started))
+	started = time.Now()
 	if _, err := cli.Auth("devmount-dev-token"); err != nil {
+		metrics.add("control_auth", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_auth", time.Since(started))
+	started = time.Now()
 	if _, err := cli.ResumeSession(sessionID, clientInstanceID); err != nil {
+		metrics.add("control_resume_session", time.Since(started))
 		_ = cli.Close()
 		return nil, err
 	}
+	metrics.add("control_resume_session", time.Since(started))
 	return cli, nil
 }
 
 func browseWorker(ctx context.Context, addr, id string, metrics *metricStore) error {
-	cli, err := connectClient(addr, id)
+	cli, err := connectClient(addr, id, metrics)
 	if err != nil {
 		return err
 	}
@@ -451,7 +539,7 @@ func browseWorker(ctx context.Context, addr, id string, metrics *metricStore) er
 }
 
 func saveWorker(ctx context.Context, addr, id string, metrics *metricStore) error {
-	cli, err := connectClient(addr, id)
+	cli, err := connectClient(addr, id, metrics)
 	if err != nil {
 		return err
 	}
@@ -528,7 +616,7 @@ func saveWorker(ctx context.Context, addr, id string, metrics *metricStore) erro
 }
 
 func heartbeatWorker(ctx context.Context, addr, id string, metrics *metricStore) error {
-	cli, err := connectClient(addr, id)
+	cli, err := connectClient(addr, id, metrics)
 	if err != nil {
 		return err
 	}
@@ -546,7 +634,7 @@ func heartbeatWorker(ctx context.Context, addr, id string, metrics *metricStore)
 }
 
 func resumeWorker(ctx context.Context, addr, id string, metrics *metricStore) error {
-	cli, err := connectClient(addr, id)
+	cli, err := connectClient(addr, id, metrics)
 	if err != nil {
 		return err
 	}
@@ -554,7 +642,7 @@ func resumeWorker(ctx context.Context, addr, id string, metrics *metricStore) er
 	_ = cli.Close()
 	for ctx.Err() == nil {
 		started := time.Now()
-		resumed, err := resumeClient(addr, sessionID, id)
+		resumed, err := resumeClient(addr, sessionID, id, metrics)
 		metrics.add("resume_connect", time.Since(started))
 		if err != nil {
 			return fmt.Errorf("%s resume_connect: %w", id, err)
@@ -716,12 +804,12 @@ func writeCSV(path string, samples []sample) error {
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "errors"}
+	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "session_read_acquires", "session_read_wait_over_50us", "session_read_wait_over_1ms", "session_read_total_wait_ns", "session_read_max_wait_ns", "session_write_acquires", "session_write_wait_over_50us", "session_write_wait_over_1ms", "session_write_total_wait_ns", "session_write_max_wait_ns", "journal_read_acquires", "journal_read_wait_over_50us", "journal_read_wait_over_1ms", "journal_read_total_wait_ns", "journal_read_max_wait_ns", "journal_write_acquires", "journal_write_wait_over_50us", "journal_write_wait_over_1ms", "journal_write_total_wait_ns", "journal_write_max_wait_ns", "control_hello_count", "control_hello_errors", "control_hello_max_wait_ns", "control_auth_count", "control_auth_errors", "control_auth_max_wait_ns", "control_create_count", "control_create_errors", "control_create_max_wait_ns", "control_resume_count", "control_resume_errors", "control_resume_max_wait_ns", "control_heartbeat_count", "control_heartbeat_errors", "control_heartbeat_max_wait_ns", "errors"}
 	if err := w.Write(header); err != nil {
 		return err
 	}
 	for _, s := range samples {
-		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.Errors)}
+		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.SessionReadAcquires), fmt.Sprint(s.SessionReadWaitOver50us), fmt.Sprint(s.SessionReadWaitOver1ms), fmt.Sprint(s.SessionReadTotalWaitNS), fmt.Sprint(s.SessionReadMaxWaitNS), fmt.Sprint(s.SessionWriteAcquires), fmt.Sprint(s.SessionWriteWaitOver50us), fmt.Sprint(s.SessionWriteWaitOver1ms), fmt.Sprint(s.SessionWriteTotalWaitNS), fmt.Sprint(s.SessionWriteMaxWaitNS), fmt.Sprint(s.JournalReadAcquires), fmt.Sprint(s.JournalReadWaitOver50us), fmt.Sprint(s.JournalReadWaitOver1ms), fmt.Sprint(s.JournalReadTotalWaitNS), fmt.Sprint(s.JournalReadMaxWaitNS), fmt.Sprint(s.JournalWriteAcquires), fmt.Sprint(s.JournalWriteWaitOver50us), fmt.Sprint(s.JournalWriteWaitOver1ms), fmt.Sprint(s.JournalWriteTotalWaitNS), fmt.Sprint(s.JournalWriteMaxWaitNS), fmt.Sprint(s.ControlHelloCount), fmt.Sprint(s.ControlHelloErrors), fmt.Sprint(s.ControlHelloMaxWaitNS), fmt.Sprint(s.ControlAuthCount), fmt.Sprint(s.ControlAuthErrors), fmt.Sprint(s.ControlAuthMaxWaitNS), fmt.Sprint(s.ControlCreateCount), fmt.Sprint(s.ControlCreateErrors), fmt.Sprint(s.ControlCreateMaxWaitNS), fmt.Sprint(s.ControlResumeCount), fmt.Sprint(s.ControlResumeErrors), fmt.Sprint(s.ControlResumeMaxWaitNS), fmt.Sprint(s.ControlHeartbeatCount), fmt.Sprint(s.ControlHeartbeatErrors), fmt.Sprint(s.ControlHeartbeatMaxWaitNS), fmt.Sprint(s.Errors)}
 		if err := w.Write(row); err != nil {
 			return err
 		}
@@ -788,7 +876,14 @@ func writeReport(path string, data reportData) error {
 		fmt.Fprintf(f, "- metadata read lock waits >50us: first=%d peak=%d last=%d\n", first.MetadataReadWaitOver50us, peakReadWait50us, last.MetadataReadWaitOver50us)
 		fmt.Fprintf(f, "- metadata read lock waits >1ms: first=%d peak=%d last=%d\n", first.MetadataReadWaitOver1ms, peakReadWait1ms, last.MetadataReadWaitOver1ms)
 		fmt.Fprintf(f, "- metadata write lock waits >50us: first=%d peak=%d last=%d\n", first.MetadataWriteWaitOver50us, peakWriteWait50us, last.MetadataWriteWaitOver50us)
-		fmt.Fprintf(f, "- metadata write lock waits >1ms: first=%d peak=%d last=%d\n\n", first.MetadataWriteWaitOver1ms, peakWriteWait1ms, last.MetadataWriteWaitOver1ms)
+		fmt.Fprintf(f, "- metadata write lock waits >1ms: first=%d peak=%d last=%d\n", first.MetadataWriteWaitOver1ms, peakWriteWait1ms, last.MetadataWriteWaitOver1ms)
+		fmt.Fprintf(f, "- session write lock waits >1ms: first=%d last=%d\n", first.SessionWriteWaitOver1ms, last.SessionWriteWaitOver1ms)
+		fmt.Fprintf(f, "- journal write lock waits >1ms: first=%d last=%d\n", first.JournalWriteWaitOver1ms, last.JournalWriteWaitOver1ms)
+		fmt.Fprintf(f, "- control hello count/errors/max: %d/%d/%s\n", last.ControlHelloCount, last.ControlHelloErrors, time.Duration(last.ControlHelloMaxWaitNS))
+		fmt.Fprintf(f, "- control auth count/errors/max: %d/%d/%s\n", last.ControlAuthCount, last.ControlAuthErrors, time.Duration(last.ControlAuthMaxWaitNS))
+		fmt.Fprintf(f, "- control create count/errors/max: %d/%d/%s\n", last.ControlCreateCount, last.ControlCreateErrors, time.Duration(last.ControlCreateMaxWaitNS))
+		fmt.Fprintf(f, "- control resume count/errors/max: %d/%d/%s\n", last.ControlResumeCount, last.ControlResumeErrors, time.Duration(last.ControlResumeMaxWaitNS))
+		fmt.Fprintf(f, "- control heartbeat count/errors/max: %d/%d/%s\n\n", last.ControlHeartbeatCount, last.ControlHeartbeatErrors, time.Duration(last.ControlHeartbeatMaxWaitNS))
 	}
 	fmt.Fprintf(f, "## latency summary\n\n")
 	fmt.Fprintf(f, "| metric | count | p50 | p95 | max |\n")

@@ -25,6 +25,7 @@ type Server struct {
 	Now              func() time.Time
 	StartedAt        time.Time
 	Audit            *AuditLogger
+	Control          *controlObserver
 }
 
 type connectionState struct {
@@ -42,6 +43,7 @@ func New(addr string) *Server {
 		AuthToken:        "devmount-dev-token",
 		SessionManager:   NewSessionManager(),
 		JournalRetention: 256,
+		Control:          &controlObserver{},
 		Now:              time.Now,
 		StartedAt:        time.Now(),
 	}
@@ -126,8 +128,17 @@ func (s *Server) dispatch(conn net.Conn, state *connectionState, header protocol
 }
 
 func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header protocol.Header, payload []byte) {
+	started := time.Now()
+	op := ""
+	failed := true
+	defer func() {
+		if op != "" {
+			s.Control.observe(op, time.Since(started), failed)
+		}
+	}()
 	switch header.Opcode {
 	case protocol.OpcodeHelloReq:
+		op = "hello"
 		req, err := transport.DecodePayload[protocol.HelloReq](payload)
 		if err != nil {
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid hello payload", false, nil)
@@ -152,8 +163,10 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 			ServerTime:              protocol.NowRFC3339(s.Now()),
 			Capabilities:            protocol.DefaultCapabilities(),
 		}
+		failed = false
 		s.writeResponse(conn, header, protocol.OpcodeHelloResp, 0, resp)
 	case protocol.OpcodeAuthReq:
+		op = "auth"
 		if !state.helloDone {
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "hello required before auth", false, nil)
 			return
@@ -170,8 +183,10 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		state.authenticated = true
 		state.principalID = "developer"
 		resp := protocol.AuthResp{Authenticated: true, PrincipalID: state.principalID, DisplayName: "Developer", GrantedFeature: protocol.DefaultCapabilities().Features}
+		failed = false
 		s.writeResponse(conn, header, protocol.OpcodeAuthResp, 0, resp)
 	case protocol.OpcodeCreateSessionReq:
+		op = "create_session"
 		if !state.authenticated {
 			s.writeError(conn, header, protocol.ErrAuthRequired, "authentication required", false, map[string]any{"operation": "CreateSession"})
 			return
@@ -191,8 +206,10 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		now := s.Now()
 		session := s.SessionManager.Create(state.principalID, req.ClientInstanceID, lease, now)
 		resp := protocol.CreateSessionResp{SessionID: session.ID, LeaseSeconds: session.LeaseSeconds, ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
+		failed = false
 		s.writeResponse(conn, header, protocol.OpcodeCreateSessionResp, session.ID, resp)
 	case protocol.OpcodeResumeSessionReq:
+		op = "resume_session"
 		req, err := transport.DecodePayload[protocol.ResumeSessionReq](payload)
 		if err != nil {
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid resume-session payload", false, nil)
@@ -215,8 +232,10 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 		state.authenticated = true
 		state.principalID = session.PrincipalID
 		resp := protocol.ResumeSessionResp{SessionID: session.ID, LeaseSeconds: session.LeaseSeconds, ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
+		failed = false
 		s.writeResponse(conn, header, protocol.OpcodeResumeSessionResp, session.ID, resp)
 	case protocol.OpcodeHeartbeatReq:
+		op = "heartbeat"
 		req, err := transport.DecodePayload[protocol.HeartbeatReq](payload)
 		if err != nil {
 			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid heartbeat payload", false, nil)
@@ -233,6 +252,7 @@ func (s *Server) dispatchControl(conn net.Conn, state *connectionState, header p
 			return
 		}
 		resp := protocol.HeartbeatResp{SessionID: session.ID, ServerTime: protocol.NowRFC3339(now), ExpiresAt: protocol.NowRFC3339(session.ExpiresAt), State: session.State}
+		failed = false
 		s.writeResponse(conn, header, protocol.OpcodeHeartbeatResp, session.ID, resp)
 	default:
 		s.writeError(conn, header, protocol.ErrUnsupportedOp, fmt.Sprintf("unsupported control opcode %d", header.Opcode), false, nil)

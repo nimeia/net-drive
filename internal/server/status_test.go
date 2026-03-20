@@ -37,6 +37,16 @@ func TestSnapshotStatusUsesBackendRootAndUptime(t *testing.T) {
 	if len(status.Capabilities) == 0 {
 		t.Fatalf("expected non-empty capabilities")
 	}
+	foundControlLatency := false
+	for _, cap := range status.Capabilities {
+		if cap == "control-op-latency" {
+			foundControlLatency = true
+			break
+		}
+	}
+	if !foundControlLatency {
+		t.Fatalf("capabilities = %v, want control-op-latency", status.Capabilities)
+	}
 }
 
 func TestStatusHandlerHealthzStatusAndRuntimez(t *testing.T) {
@@ -103,5 +113,8 @@ func TestStatusHandlerHealthzStatusAndRuntimez(t *testing.T) {
 	}
 	if runtimeSnap.Metadata.Locks.Read.Acquires == 0 {
 		t.Fatalf("runtime snapshot locks = %+v, want acquisitions", runtimeSnap.Metadata.Locks)
+	}
+	if runtimeSnap.Control.Hello.Count != 0 || runtimeSnap.Control.Heartbeat.Count != 0 {
+		t.Fatalf("runtime snapshot control counters = %+v, want zero-value before control traffic", runtimeSnap.Control)
 	}
 }

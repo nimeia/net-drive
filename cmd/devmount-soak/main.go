@@ -151,6 +151,12 @@ type sample struct {
 	ControlHeartbeatCount     uint64
 	ControlHeartbeatErrors    uint64
 	ControlHeartbeatMaxWaitNS uint64
+	FaultSuppressedNetClosed  uint64
+	FaultSuppressedEOF        uint64
+	FaultSuppressedUnexpected uint64
+	FaultSuppressedBrokenPipe uint64
+	FaultSuppressedConnReset  uint64
+	FaultLogged               uint64
 	Errors                    int64
 }
 
@@ -346,6 +352,12 @@ loop:
 				ControlHeartbeatCount:     snap.Control.Heartbeat.Count,
 				ControlHeartbeatErrors:    snap.Control.Heartbeat.Errors,
 				ControlHeartbeatMaxWaitNS: uint64(snap.Control.Heartbeat.MaxWait),
+				FaultSuppressedNetClosed:  snap.Faults.SuppressedNetClosed,
+				FaultSuppressedEOF:        snap.Faults.SuppressedEOF,
+				FaultSuppressedUnexpected: snap.Faults.SuppressedUnexpectedEOF,
+				FaultSuppressedBrokenPipe: snap.Faults.SuppressedBrokenPipe,
+				FaultSuppressedConnReset:  snap.Faults.SuppressedConnReset,
+				FaultLogged:               snap.Faults.Logged,
 				Errors:                    errorsSeen.Load(),
 			})
 		}
@@ -804,12 +816,12 @@ func writeCSV(path string, samples []sample) error {
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "session_read_acquires", "session_read_wait_over_50us", "session_read_wait_over_1ms", "session_read_total_wait_ns", "session_read_max_wait_ns", "session_write_acquires", "session_write_wait_over_50us", "session_write_wait_over_1ms", "session_write_total_wait_ns", "session_write_max_wait_ns", "journal_read_acquires", "journal_read_wait_over_50us", "journal_read_wait_over_1ms", "journal_read_total_wait_ns", "journal_read_max_wait_ns", "journal_write_acquires", "journal_write_wait_over_50us", "journal_write_wait_over_1ms", "journal_write_total_wait_ns", "journal_write_max_wait_ns", "control_hello_count", "control_hello_errors", "control_hello_max_wait_ns", "control_auth_count", "control_auth_errors", "control_auth_max_wait_ns", "control_create_count", "control_create_errors", "control_create_max_wait_ns", "control_resume_count", "control_resume_errors", "control_resume_max_wait_ns", "control_heartbeat_count", "control_heartbeat_errors", "control_heartbeat_max_wait_ns", "errors"}
+	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "session_read_acquires", "session_read_wait_over_50us", "session_read_wait_over_1ms", "session_read_total_wait_ns", "session_read_max_wait_ns", "session_write_acquires", "session_write_wait_over_50us", "session_write_wait_over_1ms", "session_write_total_wait_ns", "session_write_max_wait_ns", "journal_read_acquires", "journal_read_wait_over_50us", "journal_read_wait_over_1ms", "journal_read_total_wait_ns", "journal_read_max_wait_ns", "journal_write_acquires", "journal_write_wait_over_50us", "journal_write_wait_over_1ms", "journal_write_total_wait_ns", "journal_write_max_wait_ns", "control_hello_count", "control_hello_errors", "control_hello_max_wait_ns", "control_auth_count", "control_auth_errors", "control_auth_max_wait_ns", "control_create_count", "control_create_errors", "control_create_max_wait_ns", "control_resume_count", "control_resume_errors", "control_resume_max_wait_ns", "control_heartbeat_count", "control_heartbeat_errors", "control_heartbeat_max_wait_ns", "fault_suppressed_net_closed", "fault_suppressed_eof", "fault_suppressed_unexpected_eof", "fault_suppressed_broken_pipe", "fault_suppressed_conn_reset", "fault_logged", "errors"}
 	if err := w.Write(header); err != nil {
 		return err
 	}
 	for _, s := range samples {
-		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.SessionReadAcquires), fmt.Sprint(s.SessionReadWaitOver50us), fmt.Sprint(s.SessionReadWaitOver1ms), fmt.Sprint(s.SessionReadTotalWaitNS), fmt.Sprint(s.SessionReadMaxWaitNS), fmt.Sprint(s.SessionWriteAcquires), fmt.Sprint(s.SessionWriteWaitOver50us), fmt.Sprint(s.SessionWriteWaitOver1ms), fmt.Sprint(s.SessionWriteTotalWaitNS), fmt.Sprint(s.SessionWriteMaxWaitNS), fmt.Sprint(s.JournalReadAcquires), fmt.Sprint(s.JournalReadWaitOver50us), fmt.Sprint(s.JournalReadWaitOver1ms), fmt.Sprint(s.JournalReadTotalWaitNS), fmt.Sprint(s.JournalReadMaxWaitNS), fmt.Sprint(s.JournalWriteAcquires), fmt.Sprint(s.JournalWriteWaitOver50us), fmt.Sprint(s.JournalWriteWaitOver1ms), fmt.Sprint(s.JournalWriteTotalWaitNS), fmt.Sprint(s.JournalWriteMaxWaitNS), fmt.Sprint(s.ControlHelloCount), fmt.Sprint(s.ControlHelloErrors), fmt.Sprint(s.ControlHelloMaxWaitNS), fmt.Sprint(s.ControlAuthCount), fmt.Sprint(s.ControlAuthErrors), fmt.Sprint(s.ControlAuthMaxWaitNS), fmt.Sprint(s.ControlCreateCount), fmt.Sprint(s.ControlCreateErrors), fmt.Sprint(s.ControlCreateMaxWaitNS), fmt.Sprint(s.ControlResumeCount), fmt.Sprint(s.ControlResumeErrors), fmt.Sprint(s.ControlResumeMaxWaitNS), fmt.Sprint(s.ControlHeartbeatCount), fmt.Sprint(s.ControlHeartbeatErrors), fmt.Sprint(s.ControlHeartbeatMaxWaitNS), fmt.Sprint(s.Errors)}
+		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.SessionReadAcquires), fmt.Sprint(s.SessionReadWaitOver50us), fmt.Sprint(s.SessionReadWaitOver1ms), fmt.Sprint(s.SessionReadTotalWaitNS), fmt.Sprint(s.SessionReadMaxWaitNS), fmt.Sprint(s.SessionWriteAcquires), fmt.Sprint(s.SessionWriteWaitOver50us), fmt.Sprint(s.SessionWriteWaitOver1ms), fmt.Sprint(s.SessionWriteTotalWaitNS), fmt.Sprint(s.SessionWriteMaxWaitNS), fmt.Sprint(s.JournalReadAcquires), fmt.Sprint(s.JournalReadWaitOver50us), fmt.Sprint(s.JournalReadWaitOver1ms), fmt.Sprint(s.JournalReadTotalWaitNS), fmt.Sprint(s.JournalReadMaxWaitNS), fmt.Sprint(s.JournalWriteAcquires), fmt.Sprint(s.JournalWriteWaitOver50us), fmt.Sprint(s.JournalWriteWaitOver1ms), fmt.Sprint(s.JournalWriteTotalWaitNS), fmt.Sprint(s.JournalWriteMaxWaitNS), fmt.Sprint(s.ControlHelloCount), fmt.Sprint(s.ControlHelloErrors), fmt.Sprint(s.ControlHelloMaxWaitNS), fmt.Sprint(s.ControlAuthCount), fmt.Sprint(s.ControlAuthErrors), fmt.Sprint(s.ControlAuthMaxWaitNS), fmt.Sprint(s.ControlCreateCount), fmt.Sprint(s.ControlCreateErrors), fmt.Sprint(s.ControlCreateMaxWaitNS), fmt.Sprint(s.ControlResumeCount), fmt.Sprint(s.ControlResumeErrors), fmt.Sprint(s.ControlResumeMaxWaitNS), fmt.Sprint(s.ControlHeartbeatCount), fmt.Sprint(s.ControlHeartbeatErrors), fmt.Sprint(s.ControlHeartbeatMaxWaitNS), fmt.Sprint(s.FaultSuppressedNetClosed), fmt.Sprint(s.FaultSuppressedEOF), fmt.Sprint(s.FaultSuppressedUnexpected), fmt.Sprint(s.FaultSuppressedBrokenPipe), fmt.Sprint(s.FaultSuppressedConnReset), fmt.Sprint(s.FaultLogged), fmt.Sprint(s.Errors)}
 		if err := w.Write(row); err != nil {
 			return err
 		}
@@ -823,7 +835,7 @@ func writeReport(path string, data reportData) error {
 		return err
 	}
 	defer f.Close()
-	fmt.Fprintf(f, "# Iter 44 sampled soak report\n\n")
+	fmt.Fprintf(f, "# Iter 47 sampled soak report\n\n")
 	fmt.Fprintf(f, "- duration: %s\n", data.Duration)
 	fmt.Fprintf(f, "- errors: %d\n", data.Errors)
 	fmt.Fprintf(f, "- watch events: %d\n", data.WatchEvents)
@@ -883,7 +895,8 @@ func writeReport(path string, data reportData) error {
 		fmt.Fprintf(f, "- control auth count/errors/max: %d/%d/%s\n", last.ControlAuthCount, last.ControlAuthErrors, time.Duration(last.ControlAuthMaxWaitNS))
 		fmt.Fprintf(f, "- control create count/errors/max: %d/%d/%s\n", last.ControlCreateCount, last.ControlCreateErrors, time.Duration(last.ControlCreateMaxWaitNS))
 		fmt.Fprintf(f, "- control resume count/errors/max: %d/%d/%s\n", last.ControlResumeCount, last.ControlResumeErrors, time.Duration(last.ControlResumeMaxWaitNS))
-		fmt.Fprintf(f, "- control heartbeat count/errors/max: %d/%d/%s\n\n", last.ControlHeartbeatCount, last.ControlHeartbeatErrors, time.Duration(last.ControlHeartbeatMaxWaitNS))
+		fmt.Fprintf(f, "- control heartbeat count/errors/max: %d/%d/%s\n", last.ControlHeartbeatCount, last.ControlHeartbeatErrors, time.Duration(last.ControlHeartbeatMaxWaitNS))
+		fmt.Fprintf(f, "- fault log counters suppressed(net_closed/eof/unexpected/broken_pipe/conn_reset)=%d/%d/%d/%d/%d logged=%d\n\n", last.FaultSuppressedNetClosed, last.FaultSuppressedEOF, last.FaultSuppressedUnexpected, last.FaultSuppressedBrokenPipe, last.FaultSuppressedConnReset, last.FaultLogged)
 	}
 	fmt.Fprintf(f, "## latency summary\n\n")
 	fmt.Fprintf(f, "| metric | count | p50 | p95 | max |\n")

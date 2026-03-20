@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"developer-mount/internal/protocol"
@@ -26,6 +27,7 @@ type Server struct {
 	StartedAt        time.Time
 	Audit            *AuditLogger
 	Control          *controlObserver
+	Faults           *faultLogObserver
 }
 
 type connectionState struct {
@@ -44,6 +46,7 @@ func New(addr string) *Server {
 		SessionManager:   NewSessionManager(),
 		JournalRetention: 256,
 		Control:          &controlObserver{},
+		Faults:           &faultLogObserver{},
 		Now:              time.Now,
 		StartedAt:        time.Now(),
 	}
@@ -89,9 +92,7 @@ func (s *Server) handleConn(conn net.Conn) {
 	for {
 		header, payload, err := transport.DecodeFrame(conn)
 		if err != nil {
-			if !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
-				log.Printf("decode frame error: %v", err)
-			}
+			s.logConnectionError("decode frame", err)
 			return
 		}
 		s.dispatch(conn, &state, header, payload)
@@ -595,7 +596,9 @@ func (s *Server) writeResponse(conn net.Conn, reqHeader protocol.Header, opcode 
 		log.Printf("encode response failed: %v", err)
 		return
 	}
-	_, _ = conn.Write(frame)
+	if _, err := conn.Write(frame); err != nil {
+		s.logConnectionError("write response", err)
+	}
 }
 
 func (s *Server) writeError(conn net.Conn, reqHeader protocol.Header, code protocol.ErrorCode, message string, retryable bool, details map[string]any) {
@@ -605,7 +608,38 @@ func (s *Server) writeError(conn net.Conn, reqHeader protocol.Header, code proto
 		log.Printf("encode error response failed: %v", err)
 		return
 	}
-	_, _ = conn.Write(frame)
+	if _, err := conn.Write(frame); err != nil {
+		s.logConnectionError("write error response", err)
+	}
+}
+
+func (s *Server) logConnectionError(prefix string, err error) {
+	if err == nil {
+		return
+	}
+	if s == nil {
+		log.Printf("%s error: %v", prefix, err)
+		return
+	}
+	if s.Faults == nil {
+		s.Faults = &faultLogObserver{}
+	}
+	if s.Faults.observeSuppressed(err) {
+		return
+	}
+	s.Faults.observeLogged()
+	log.Printf("%s error: %v", prefix, err)
+}
+
+func isExpectedConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, net.ErrClosed) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "broken pipe") || strings.Contains(lower, "connection reset by peer") || strings.Contains(lower, "forcibly closed by the remote host")
 }
 
 func (s *Server) writeBackendError(conn net.Conn, reqHeader protocol.Header, err error) {

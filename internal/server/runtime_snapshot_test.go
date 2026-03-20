@@ -1,6 +1,7 @@
 package server
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,6 +58,9 @@ func TestServerSnapshotRuntimeIncludesCountsAndLockSamples(t *testing.T) {
 	srv.Control.observe("create_session", time.Millisecond, false)
 	srv.Control.observe("resume_session", 4*time.Millisecond, false)
 	srv.Control.observe("heartbeat", 1500*time.Microsecond, false)
+	srv.Faults.observeSuppressed(io.EOF)
+	srv.Faults.observeSuppressed(io.ErrUnexpectedEOF)
+	srv.Faults.observeLogged()
 	snap := srv.SnapshotRuntime(now)
 	if snap.At.IsZero() {
 		t.Fatalf("SnapshotRuntime().At is zero")
@@ -75,5 +79,8 @@ func TestServerSnapshotRuntimeIncludesCountsAndLockSamples(t *testing.T) {
 	}
 	if snap.Control.Hello.Count != 1 || snap.Control.Auth.Errors != 1 || snap.Control.ResumeSession.Count != 1 || snap.Control.Heartbeat.MaxWait == 0 {
 		t.Fatalf("control snapshot = %+v", snap.Control)
+	}
+	if snap.Faults.SuppressedEOF != 1 || snap.Faults.SuppressedUnexpectedEOF != 1 || snap.Faults.Logged != 1 {
+		t.Fatalf("fault snapshot = %+v", snap.Faults)
 	}
 }

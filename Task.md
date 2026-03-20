@@ -373,3 +373,11 @@
 
 ### P2
 - [ ] 验证 3~5 分钟 soak 下 heap / goroutine / sessions / handles / dir cursors 是否稳定回落
+
+
+## Iter 47 — control path / fault injection 噪声收口
+- [x] 将 fault injection 下预期的连接级 EOF / unexpected EOF / broken pipe / connection reset 从逐条日志改为计数收口
+- [x] 在 `/runtimez` 中新增 fault log counters
+- [x] 将 fault log counters 接入 `cmd/devmount-soak` CSV / Markdown 报告
+- [x] 为 fault log observer 补单测
+- [ ] 跑通 targeted tests / build / dry-run 验证链路

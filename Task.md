@@ -355,3 +355,21 @@
 - [x] 新增 `cmd/devmount-soak` 与 `scripts/run-sampled-soak.{sh,ps1}`
 - [x] 为 runtime snapshot 与 status handler 补单测
 - [ ] 跑完 3~5 分钟 sampled soak 并回填最终报告（沙盒受单次 35s 命令上限影响，当前仓库已具备本地执行入口）
+
+
+## Iter 45 — mixed workload 长尾优化与可观测性补强
+
+### P0
+- [x] 把“性能问题清单 + 优先级 + 建议修复点”固化到 Task.md，作为后续推进清单
+- [x] 为 control path 增加 server 侧延迟采样（hello / auth / create_session / resume_session / heartbeat）
+- [x] 将 control path 延迟采样接入 `/runtimez` 与 sampled soak 报告
+- [x] 将 session / journal 锁等待观测接入 sampled soak CSV/Markdown 报告
+- [ ] 跑一轮本地 3~5 分钟 sampled soak，导出最终 CSV / Markdown 报告并对比 Iter 43/44 基线
+
+### P1
+- [ ] 降级或静默 fault injection 下预期的连接级 EOF / half-close / delayed-write 错误日志
+- [ ] 继续压缩 metadata 热路径锁域与持锁区间，复查 attr / negative / dir snapshot / small file cache 的过期读路径
+- [ ] 在 soak 报告中补 watch backlog 长时趋势结论
+
+### P2
+- [ ] 验证 3~5 分钟 soak 下 heap / goroutine / sessions / handles / dir cursors 是否稳定回落

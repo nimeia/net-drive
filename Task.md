@@ -381,3 +381,10 @@
 - [x] 将 fault log counters 接入 `cmd/devmount-soak` CSV / Markdown 报告
 - [x] 为 fault log observer 补单测
 - [ ] 跑通 targeted tests / build / dry-run 验证链路
+
+
+## Iter 48 — 本地 sampled soak / mixed workload 回归对比
+- [x] 新增 `scripts/run-regression-compare.{sh,ps1}`，统一串联 stress suite 与 sampled soak
+- [x] 新增 `scripts/render-regression-compare.py`，汇总 stress / soak 产物为单份 Markdown 报告
+- [x] 补充 Iter 48 文档，明确本地运行与产物位置
+- [ ] 本地实际跑完 regression compare，并回填最终对比结果

@@ -330,3 +330,26 @@ curl http://127.0.0.1:17891/runtimez
 ```
 
 The runtime snapshot includes metadata/session/journal counts plus read/write lock wait counters for the server-side RW locks.
+\n
+## Iter 48 regression compare
+
+To run the full local regression compare wrapper:
+
+```bash
+./scripts/run-regression-compare.sh
+```
+
+On Windows PowerShell:
+
+```powershell
+./scripts/run-regression-compare.ps1
+```
+
+Dry-run only:
+
+```bash
+DRY_RUN=1 ./scripts/run-regression-compare.sh
+```
+
+This wrapper uses the existing stress/soak scripts and then renders a unified markdown report at `dist/regression/regression-compare-report.md`.
+\n

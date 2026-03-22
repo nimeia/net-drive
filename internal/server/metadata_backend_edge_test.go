@@ -162,6 +162,38 @@ func TestMetadataBackendReadDirPaginationAndCursorBounds(t *testing.T) {
 	}
 }
 
+func TestMetadataBackendCloseDirReleasesCursor(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("WriteFile(a.txt) error = %v", err)
+	}
+
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+
+	cursorID, err := backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir() error = %v", err)
+	}
+	if got := backend.RuntimeSnapshot().DirCursors; got != 1 {
+		t.Fatalf("RuntimeSnapshot().DirCursors = %d, want 1", got)
+	}
+	if err := backend.CloseDir(cursorID); err != nil {
+		t.Fatalf("CloseDir() error = %v", err)
+	}
+	if got := backend.RuntimeSnapshot().DirCursors; got != 0 {
+		t.Fatalf("RuntimeSnapshot().DirCursors = %d, want 0", got)
+	}
+	if _, err := backend.ReadDir(cursorID, 0, 1); !os.IsNotExist(err) {
+		t.Fatalf("ReadDir(closed cursor) error = %v, want os.ErrNotExist", err)
+	}
+	if err := backend.CloseDir(cursorID); !os.IsNotExist(err) {
+		t.Fatalf("CloseDir(closed cursor) error = %v, want os.ErrNotExist", err)
+	}
+}
+
 func TestMetadataBackendSparseWriteAndCrossDirectoryRename(t *testing.T) {
 	root := t.TempDir()
 	if err := os.Mkdir(filepath.Join(root, "src"), 0o755); err != nil {
@@ -210,7 +242,6 @@ func TestMetadataBackendSparseWriteAndCrossDirectoryRename(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenFile(sparse read) error = %v", err)
 	}
-	defer func() { _ = backend.CloseHandle(readHandle) }()
 	data, eof, err := backend.ReadFile(readHandle, 0, 16)
 	if err != nil {
 		t.Fatalf("ReadFile(sparse) error = %v", err)
@@ -222,6 +253,9 @@ func TestMetadataBackendSparseWriteAndCrossDirectoryRename(t *testing.T) {
 		if data[i] != 0 {
 			t.Fatalf("sparse hole byte[%d] = %d, want 0", i, data[i])
 		}
+	}
+	if err := backend.CloseHandle(readHandle); err != nil {
+		t.Fatalf("CloseHandle(sparse read) error = %v", err)
 	}
 
 	if _, err := backend.RenamePath(srcDir.NodeID, "sparse.bin", dstDir.NodeID, "existing.txt", false); !errors.Is(err, errAlreadyExists) {

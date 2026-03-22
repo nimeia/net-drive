@@ -49,6 +49,15 @@ func (c *Client) ReadDir(dirCursorID uint64, cookie uint64, maxEntries uint32) (
 	return resp, nil
 }
 
+func (c *Client) CloseDir(dirCursorID uint64) (protocol.CloseDirResp, error) {
+	resp, err := requestDecode[protocol.CloseDirResp](c, protocol.ChannelMetadata, protocol.OpcodeCloseDirReq, protocol.CloseDirReq{DirCursorID: dirCursorID})
+	if err != nil {
+		return protocol.CloseDirResp{}, err
+	}
+	c.removeDirCursor(dirCursorID)
+	return resp, nil
+}
+
 func (c *Client) Rename(srcParentNodeID uint64, srcName string, dstParentNodeID uint64, dstName string, replace bool) (protocol.RenameResp, error) {
 	resp, err := requestDecode[protocol.RenameResp](c, protocol.ChannelMetadata, protocol.OpcodeRenameReq, protocol.RenameReq{
 		SrcParentNodeID: srcParentNodeID,

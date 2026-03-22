@@ -285,6 +285,51 @@ func TestRecoveryResultsReplaceTrackedHandlesAndWatches(t *testing.T) {
 	}
 }
 
+func TestCloseDirRemovesTrackedCursor(t *testing.T) {
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+
+	cli := New("pipe")
+	cli.Conn = clientConn
+	cli.updateDirCursor(TrackedDirCursor{DirCursorID: 30, NodeID: 3})
+
+	runPipeServer(t, serverConn, func(conn net.Conn) {
+		header, payload, err := transport.DecodeFrame(conn)
+		if err != nil {
+			t.Errorf("DecodeFrame(request) error = %v", err)
+			return
+		}
+		if header.Channel != protocol.ChannelMetadata || header.Opcode != protocol.OpcodeCloseDirReq {
+			t.Errorf("header = %+v, want metadata/CloseDirReq", header)
+		}
+		req, err := transport.DecodePayload[protocol.CloseDirReq](payload)
+		if err != nil {
+			t.Errorf("DecodePayload(CloseDirReq) error = %v", err)
+			return
+		}
+		if req.DirCursorID != 30 {
+			t.Errorf("DirCursorID = %d, want 30", req.DirCursorID)
+		}
+		writePipeResponse(t, conn, protocol.Header{
+			Channel:   protocol.ChannelMetadata,
+			Opcode:    protocol.OpcodeCloseDirResp,
+			RequestID: header.RequestID,
+		}, protocol.CloseDirResp{Closed: true})
+	})
+
+	resp, err := cli.CloseDir(30)
+	if err != nil {
+		t.Fatalf("CloseDir() error = %v", err)
+	}
+	if !resp.Closed {
+		t.Fatalf("CloseDir().Closed = false, want true")
+	}
+	state := cli.SnapshotState()
+	if _, ok := state.TrackedDirCursors[30]; ok {
+		t.Fatalf("tracked dir cursor still present: %+v", state.TrackedDirCursors)
+	}
+}
+
 func TestDecodeIntoUnsupportedTarget(t *testing.T) {
 	var out struct{}
 	err := DecodeInto([]byte(`{"ok":true}`), &out)

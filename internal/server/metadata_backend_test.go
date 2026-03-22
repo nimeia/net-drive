@@ -373,6 +373,229 @@ func TestMetadataBackendDirSnapshotCacheAndRootPrefetch(t *testing.T) {
 	}
 }
 
+func TestMetadataBackendReadOnlyCloseKeepsCachedParentSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("WriteFile(a.txt) error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	backend.cacheTTL = time.Hour
+
+	cursorID, err := backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(warm root) error = %v", err)
+	}
+	if _, err := backend.ReadDir(cursorID, 0, 10); err != nil {
+		t.Fatalf("ReadDir(warm root) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	statsBefore := backend.Stats()
+
+	entry, err := backend.Lookup(backend.RootNodeID(), "a.txt")
+	if err != nil {
+		t.Fatalf("Lookup(a.txt) error = %v", err)
+	}
+	handleID, _, err := backend.OpenFile(entry.NodeID, false, false)
+	if err != nil {
+		t.Fatalf("OpenFile(read-only) error = %v", err)
+	}
+	if err := backend.CloseHandle(handleID); err != nil {
+		t.Fatalf("CloseHandle(read-only) error = %v", err)
+	}
+
+	cursorID, err = backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(after read close) error = %v", err)
+	}
+	listing, err := backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(after read close) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "a.txt" {
+		t.Fatalf("unexpected listing after read close: %+v", listing.Entries)
+	}
+	statsAfter := backend.Stats()
+	if statsAfter.DirSnapshotMisses != statsBefore.DirSnapshotMisses {
+		t.Fatalf("DirSnapshotMisses = %d, want %d", statsAfter.DirSnapshotMisses, statsBefore.DirSnapshotMisses)
+	}
+	if statsAfter.DirSnapshotHits <= statsBefore.DirSnapshotHits {
+		t.Fatalf("DirSnapshotHits = %d, want > %d", statsAfter.DirSnapshotHits, statsBefore.DirSnapshotHits)
+	}
+}
+
+func TestMetadataBackendMutationsPatchCachedParentSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "keep.txt"), []byte("keep"), 0o644); err != nil {
+		t.Fatalf("WriteFile(keep.txt) error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	backend.cacheTTL = time.Hour
+
+	cursorID, err := backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(warm root) error = %v", err)
+	}
+	if _, err := backend.ReadDir(cursorID, 0, 10); err != nil {
+		t.Fatalf("ReadDir(warm root) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	statsBefore := backend.Stats()
+
+	entry, handleID, err := backend.CreateFile(backend.RootNodeID(), "tmp.txt", false)
+	if err != nil {
+		t.Fatalf("CreateFile(tmp.txt) error = %v", err)
+	}
+	if _, _, err := backend.WriteFile(handleID, 0, []byte("payload")); err != nil {
+		t.Fatalf("WriteFile(tmp.txt) error = %v", err)
+	}
+	if err := backend.FlushHandle(handleID); err != nil {
+		t.Fatalf("FlushHandle(tmp.txt) error = %v", err)
+	}
+	if err := backend.CloseHandle(handleID); err != nil {
+		t.Fatalf("CloseHandle(tmp.txt) error = %v", err)
+	}
+
+	cursorID, err = backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(after create) error = %v", err)
+	}
+	listing, err := backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(after create) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	if len(listing.Entries) != 2 {
+		t.Fatalf("entry count after create = %d, want 2", len(listing.Entries))
+	}
+	if listing.Entries[1].Name != "tmp.txt" || listing.Entries[1].Size != int64(len("payload")) {
+		t.Fatalf("tmp entry after create = %+v, want tmp.txt size=%d", listing.Entries[1], len("payload"))
+	}
+
+	renamed, err := backend.RenamePath(backend.RootNodeID(), entry.Name, backend.RootNodeID(), "final.txt", false)
+	if err != nil {
+		t.Fatalf("RenamePath(tmp.txt->final.txt) error = %v", err)
+	}
+	if renamed.Name != "final.txt" {
+		t.Fatalf("renamed entry name = %q, want final.txt", renamed.Name)
+	}
+
+	cursorID, err = backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(after rename) error = %v", err)
+	}
+	listing, err = backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(after rename) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	if len(listing.Entries) != 2 || listing.Entries[0].Name != "final.txt" || listing.Entries[1].Name != "keep.txt" {
+		t.Fatalf("unexpected listing after rename: %+v", listing.Entries)
+	}
+
+	finalEntry, err := backend.Lookup(backend.RootNodeID(), "final.txt")
+	if err != nil {
+		t.Fatalf("Lookup(final.txt) error = %v", err)
+	}
+	deleteHandleID, _, err := backend.OpenFile(finalEntry.NodeID, true, false)
+	if err != nil {
+		t.Fatalf("OpenFile(final.txt for delete) error = %v", err)
+	}
+	if err := backend.SetDeleteOnClose(deleteHandleID, true); err != nil {
+		t.Fatalf("SetDeleteOnClose(final.txt) error = %v", err)
+	}
+	if err := backend.CloseHandle(deleteHandleID); err != nil {
+		t.Fatalf("CloseHandle(delete final.txt) error = %v", err)
+	}
+
+	cursorID, err = backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(after delete) error = %v", err)
+	}
+	listing, err = backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(after delete) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "keep.txt" {
+		t.Fatalf("unexpected listing after delete: %+v", listing.Entries)
+	}
+
+	statsAfter := backend.Stats()
+	if statsAfter.DirSnapshotMisses != statsBefore.DirSnapshotMisses {
+		t.Fatalf("DirSnapshotMisses = %d, want %d", statsAfter.DirSnapshotMisses, statsBefore.DirSnapshotMisses)
+	}
+	if statsAfter.DirSnapshotHits < statsBefore.DirSnapshotHits+3 {
+		t.Fatalf("DirSnapshotHits = %d, want at least %d", statsAfter.DirSnapshotHits, statsBefore.DirSnapshotHits+3)
+	}
+}
+
+func TestMetadataBackendPatchedSnapshotExtendsTTL(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("a"), 0o644); err != nil {
+		t.Fatalf("WriteFile(a.txt) error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	fakeNow := time.Date(2026, 3, 22, 8, 0, 0, 0, time.UTC)
+	backend.now = func() time.Time { return fakeNow }
+	backend.cacheTTL = time.Second
+
+	cursorID, err := backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(initial) error = %v", err)
+	}
+	if _, err := backend.ReadDir(cursorID, 0, 10); err != nil {
+		t.Fatalf("ReadDir(initial) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	statsBefore := backend.Stats()
+
+	fakeNow = fakeNow.Add(800 * time.Millisecond)
+	_, handleID, err := backend.CreateFile(backend.RootNodeID(), "b.txt", false)
+	if err != nil {
+		t.Fatalf("CreateFile(b.txt) error = %v", err)
+	}
+	if _, _, err := backend.WriteFile(handleID, 0, []byte("b")); err != nil {
+		t.Fatalf("WriteFile(b.txt) error = %v", err)
+	}
+	if err := backend.FlushHandle(handleID); err != nil {
+		t.Fatalf("FlushHandle(b.txt) error = %v", err)
+	}
+	if err := backend.CloseHandle(handleID); err != nil {
+		t.Fatalf("CloseHandle(b.txt) error = %v", err)
+	}
+
+	fakeNow = fakeNow.Add(500 * time.Millisecond)
+	cursorID, err = backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(after patch ttl) error = %v", err)
+	}
+	listing, err := backend.ReadDir(cursorID, 0, 10)
+	if err != nil {
+		t.Fatalf("ReadDir(after patch ttl) error = %v", err)
+	}
+	_ = backend.CloseDir(cursorID)
+	if len(listing.Entries) != 2 {
+		t.Fatalf("entry count after patch ttl = %d, want 2", len(listing.Entries))
+	}
+	statsAfter := backend.Stats()
+	if statsAfter.DirSnapshotMisses != statsBefore.DirSnapshotMisses {
+		t.Fatalf("DirSnapshotMisses = %d, want %d after patched TTL extension", statsAfter.DirSnapshotMisses, statsBefore.DirSnapshotMisses)
+	}
+	if statsAfter.DirSnapshotHits <= statsBefore.DirSnapshotHits {
+		t.Fatalf("DirSnapshotHits = %d, want > %d after patched TTL extension", statsAfter.DirSnapshotHits, statsBefore.DirSnapshotHits)
+	}
+}
+
 func TestMetadataBackendSmallFileCacheAndInvalidation(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "package.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
@@ -430,6 +653,38 @@ func TestMetadataBackendSmallFileCacheAndInvalidation(t *testing.T) {
 	_ = backend.CloseHandle(rh)
 	if string(data) != `{"name":"demo2"}` || !eof {
 		t.Fatalf("unexpected updated read result %q eof=%v", string(data), eof)
+	}
+}
+
+func TestMetadataBackendOpenDirDoesNotPrefetchAllSmallFiles(t *testing.T) {
+	root := t.TempDir()
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	if got := backend.RuntimeSnapshot().SmallFileCache; got != 0 {
+		t.Fatalf("RuntimeSnapshot().SmallFileCache = %d, want 0", got)
+	}
+	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatalf("WriteFile(note.txt) error = %v", err)
+	}
+	backend.invalidatePath("note.txt", backend.RootNodeID())
+
+	cursorID, err := backend.OpenDir(backend.RootNodeID())
+	if err != nil {
+		t.Fatalf("OpenDir(root) error = %v", err)
+	}
+	defer func() { _ = backend.CloseDir(cursorID) }()
+
+	listing, err := backend.ReadDir(cursorID, 0, 8)
+	if err != nil {
+		t.Fatalf("ReadDir(root) error = %v", err)
+	}
+	if len(listing.Entries) != 1 || listing.Entries[0].Name != "note.txt" {
+		t.Fatalf("unexpected root listing: %+v", listing.Entries)
+	}
+	if got := backend.RuntimeSnapshot().SmallFileCache; got != 0 {
+		t.Fatalf("RuntimeSnapshot().SmallFileCache = %d, want 0 after OpenDir", got)
 	}
 }
 
@@ -505,5 +760,35 @@ func TestMetadataBackendWorkspaceProfileAndPrefetchPriority(t *testing.T) {
 	stats = backend.Stats()
 	if stats.DirSnapshotHits == 0 {
 		t.Fatalf("expected prefetched dir snapshot hit for src")
+	}
+}
+
+func TestMetadataBackendHotDirLookupPrefetchUsesCachedSnapshot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "src"), 0o755); err != nil {
+		t.Fatalf("Mkdir(src) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "src", "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatalf("WriteFile(src/main.go) error = %v", err)
+	}
+	backend, err := newMetadataBackend(root)
+	if err != nil {
+		t.Fatalf("newMetadataBackend() error = %v", err)
+	}
+	backend.cacheTTL = time.Hour
+
+	before := backend.RuntimeSnapshot().Diagnostics.DirRefresh.Count
+	for i := 0; i < 10; i++ {
+		entry, err := backend.Lookup(backend.RootNodeID(), "src")
+		if err != nil {
+			t.Fatalf("Lookup(src) error = %v", err)
+		}
+		if entry.Name != "src" {
+			t.Fatalf("Lookup(src).Name = %q, want src", entry.Name)
+		}
+	}
+	after := backend.RuntimeSnapshot().Diagnostics.DirRefresh.Count
+	if after != before {
+		t.Fatalf("DirRefresh.Count = %d, want %d for cached hot-dir prefetch", after, before)
 	}
 }

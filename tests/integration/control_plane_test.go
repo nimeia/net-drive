@@ -80,6 +80,12 @@ func TestControlPlaneHandshakeAndSession(t *testing.T) {
 	if len(listResp.Entries) != 2 {
 		t.Fatalf("entry count = %d, want 2", len(listResp.Entries))
 	}
+	if _, err := cli.CloseDir(dirResp.DirCursorID); err != nil {
+		t.Fatalf("CloseDir() error = %v", err)
+	}
+	if _, err := cli.ReadDir(dirResp.DirCursorID, 0, 10); err == nil {
+		t.Fatalf("ReadDir(closed cursor) error = nil, want error")
+	}
 
 	openResp, err := cli.OpenRead(lookupResp.Entry.NodeID)
 	if err != nil {

@@ -191,6 +191,12 @@ func (c *Client) updateDirCursor(cursor TrackedDirCursor) {
 	}
 }
 
+func (c *Client) removeDirCursor(dirCursorID uint64) {
+	c.stateMu.Lock()
+	defer c.stateMu.Unlock()
+	delete(c.state.TrackedDirCursors, dirCursorID)
+}
+
 func (c *Client) updateWatch(watch TrackedWatch) {
 	c.stateMu.Lock()
 	defer c.stateMu.Unlock()

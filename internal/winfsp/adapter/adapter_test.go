@@ -30,6 +30,9 @@ func (adapterFakeClient) OpenDir(nodeID uint64) (protocol.OpenDirResp, error) {
 func (adapterFakeClient) ReadDir(dirCursorID uint64, cookie uint64, maxEntries uint32) (protocol.ReadDirResp, error) {
 	return protocol.ReadDirResp{Entries: []protocol.DirEntry{{NodeID: 2, Name: "file.txt", FileType: protocol.FileTypeFile, Size: 4}}, NextCookie: 1, EOF: true}, nil
 }
+func (adapterFakeClient) CloseDir(dirCursorID uint64) (protocol.CloseDirResp, error) {
+	return protocol.CloseDirResp{Closed: true}, nil
+}
 func (adapterFakeClient) OpenRead(nodeID uint64) (protocol.OpenResp, error) {
 	return protocol.OpenResp{HandleID: 20, Size: 4}, nil
 }

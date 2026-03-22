@@ -18,7 +18,9 @@ type fakeClient struct {
 	openReadCount     int
 	readCount         int
 	closeHandleCount  int
+	closeDirCount     int
 	closedHandles     []uint64
+	closedDirs        []uint64
 	nextDirCursorID   uint64
 	nextHandleID      uint64
 	fileData          map[uint64][]byte
@@ -68,6 +70,12 @@ func (f *fakeClient) ReadDir(dirCursorID uint64, cookie uint64, maxEntries uint3
 	}
 	page := entries[start:end]
 	return protocol.ReadDirResp{Entries: page, NextCookie: uint64(end), EOF: end >= len(entries)}, nil
+}
+func (f *fakeClient) CloseDir(dirCursorID uint64) (protocol.CloseDirResp, error) {
+	f.closeDirCount++
+	f.closedDirs = append(f.closedDirs, dirCursorID)
+	delete(f.dirCursorToNodeID, dirCursorID)
+	return protocol.CloseDirResp{Closed: true}, nil
 }
 func (f *fakeClient) OpenRead(nodeID uint64) (protocol.OpenResp, error) {
 	f.openReadCount++
@@ -164,7 +172,10 @@ func TestOpenDirectoryReadDirectoryAndClose(t *testing.T) {
 		t.Fatalf("Close(dir) error = %v", err)
 	}
 	if client.closeHandleCount != 0 {
-		t.Fatalf("directory close should not call remote close, got %d", client.closeHandleCount)
+		t.Fatalf("directory close should not call file close, got %d", client.closeHandleCount)
+	}
+	if client.closeDirCount != 1 || len(client.closedDirs) != 1 {
+		t.Fatalf("closed dirs = %v", client.closedDirs)
 	}
 }
 func TestOpenDirectoryRejectsFileAndOpenRejectsDirectory(t *testing.T) {

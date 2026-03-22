@@ -33,16 +33,18 @@ const (
 	OpcodeHeartbeatResp     Opcode = 10
 	OpcodeErrorResp         Opcode = 11
 
-	OpcodeLookupReq   Opcode = 20
-	OpcodeLookupResp  Opcode = 21
-	OpcodeGetAttrReq  Opcode = 22
-	OpcodeGetAttrResp Opcode = 23
-	OpcodeOpenDirReq  Opcode = 24
-	OpcodeOpenDirResp Opcode = 25
-	OpcodeReadDirReq  Opcode = 26
-	OpcodeReadDirResp Opcode = 27
-	OpcodeRenameReq   Opcode = 28
-	OpcodeRenameResp  Opcode = 29
+	OpcodeLookupReq    Opcode = 20
+	OpcodeLookupResp   Opcode = 21
+	OpcodeGetAttrReq   Opcode = 22
+	OpcodeGetAttrResp  Opcode = 23
+	OpcodeOpenDirReq   Opcode = 24
+	OpcodeOpenDirResp  Opcode = 25
+	OpcodeReadDirReq   Opcode = 26
+	OpcodeReadDirResp  Opcode = 27
+	OpcodeRenameReq    Opcode = 28
+	OpcodeRenameResp   Opcode = 29
+	OpcodeCloseDirReq  Opcode = 30
+	OpcodeCloseDirResp Opcode = 31
 
 	OpcodeOpenReq              Opcode = 40
 	OpcodeOpenResp             Opcode = 41
@@ -231,6 +233,14 @@ type ReadDirResp struct {
 	Entries    []DirEntry `json:"entries"`
 	NextCookie uint64     `json:"next_cookie"`
 	EOF        bool       `json:"eof"`
+}
+
+type CloseDirReq struct {
+	DirCursorID uint64 `json:"dir_cursor_id"`
+}
+
+type CloseDirResp struct {
+	Closed bool `json:"closed"`
 }
 
 type RenameReq struct {

@@ -3,15 +3,16 @@ package server
 import "time"
 
 type MetadataRuntimeSnapshot struct {
-	Nodes          int                `json:"nodes"`
-	NodePaths      int                `json:"node_paths"`
-	DirCursors     int                `json:"dir_cursors"`
-	Handles        int                `json:"handles"`
-	AttrCache      int                `json:"attr_cache"`
-	NegativeCache  int                `json:"negative_cache"`
-	DirSnapshots   int                `json:"dir_snapshots"`
-	SmallFileCache int                `json:"small_file_cache"`
-	Locks          RWLockWaitSnapshot `json:"locks"`
+	Nodes          int                         `json:"nodes"`
+	NodePaths      int                         `json:"node_paths"`
+	DirCursors     int                         `json:"dir_cursors"`
+	Handles        int                         `json:"handles"`
+	AttrCache      int                         `json:"attr_cache"`
+	NegativeCache  int                         `json:"negative_cache"`
+	DirSnapshots   int                         `json:"dir_snapshots"`
+	SmallFileCache int                         `json:"small_file_cache"`
+	Locks          RWLockWaitSnapshot          `json:"locks"`
+	Diagnostics    MetadataDiagnosticsSnapshot `json:"diagnostics"`
 }
 
 type SessionRuntimeSnapshot struct {
@@ -44,8 +45,9 @@ func (b *metadataBackend) RuntimeSnapshot() MetadataRuntimeSnapshot {
 	if b == nil {
 		return MetadataRuntimeSnapshot{}
 	}
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.pruneExpiredCachesLocked(b.now())
 	return MetadataRuntimeSnapshot{
 		Nodes:          len(b.nodesByID),
 		NodePaths:      len(b.nodesByPath),
@@ -56,6 +58,7 @@ func (b *metadataBackend) RuntimeSnapshot() MetadataRuntimeSnapshot {
 		DirSnapshots:   len(b.dirSnapshots),
 		SmallFileCache: len(b.smallFileCache),
 		Locks:          b.mu.Snapshot(),
+		Diagnostics:    b.diag.snapshot(),
 	}
 }
 

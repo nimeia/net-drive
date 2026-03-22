@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -84,80 +85,116 @@ func (m *metricStore) summarize() []metricSummary {
 }
 
 type sample struct {
-	At                        time.Time
-	Goroutines                int
-	HeapAlloc                 uint64
-	HeapObjects               uint64
-	SessionsTotal             int
-	SessionsActive            int
-	SessionsExpired           int
-	Nodes                     int
-	NodePaths                 int
-	DirCursors                int
-	Handles                   int
-	AttrCache                 int
-	NegativeCache             int
-	DirSnapshots              int
-	SmallFileCache            int
-	WatchEvents               int64
-	Watches                   int
-	Events                    int
-	LatestSeq                 uint64
-	OldestSeq                 uint64
-	MaxBacklog                int
-	TotalBacklog              int
-	MetadataReadAcquires      uint64
-	MetadataReadWaitOver50us  uint64
-	MetadataReadWaitOver1ms   uint64
-	MetadataReadTotalWaitNS   uint64
-	MetadataReadMaxWaitNS     uint64
-	MetadataWriteAcquires     uint64
-	MetadataWriteWaitOver50us uint64
-	MetadataWriteWaitOver1ms  uint64
-	MetadataWriteTotalWaitNS  uint64
-	MetadataWriteMaxWaitNS    uint64
-	SessionReadAcquires       uint64
-	SessionReadWaitOver50us   uint64
-	SessionReadWaitOver1ms    uint64
-	SessionReadTotalWaitNS    uint64
-	SessionReadMaxWaitNS      uint64
-	SessionWriteAcquires      uint64
-	SessionWriteWaitOver50us  uint64
-	SessionWriteWaitOver1ms   uint64
-	SessionWriteTotalWaitNS   uint64
-	SessionWriteMaxWaitNS     uint64
-	JournalReadAcquires       uint64
-	JournalReadWaitOver50us   uint64
-	JournalReadWaitOver1ms    uint64
-	JournalReadTotalWaitNS    uint64
-	JournalReadMaxWaitNS      uint64
-	JournalWriteAcquires      uint64
-	JournalWriteWaitOver50us  uint64
-	JournalWriteWaitOver1ms   uint64
-	JournalWriteTotalWaitNS   uint64
-	JournalWriteMaxWaitNS     uint64
-	ControlHelloCount         uint64
-	ControlHelloErrors        uint64
-	ControlHelloMaxWaitNS     uint64
-	ControlAuthCount          uint64
-	ControlAuthErrors         uint64
-	ControlAuthMaxWaitNS      uint64
-	ControlCreateCount        uint64
-	ControlCreateErrors       uint64
-	ControlCreateMaxWaitNS    uint64
-	ControlResumeCount        uint64
-	ControlResumeErrors       uint64
-	ControlResumeMaxWaitNS    uint64
-	ControlHeartbeatCount     uint64
-	ControlHeartbeatErrors    uint64
-	ControlHeartbeatMaxWaitNS uint64
-	FaultSuppressedNetClosed  uint64
-	FaultSuppressedEOF        uint64
-	FaultSuppressedUnexpected uint64
-	FaultSuppressedBrokenPipe uint64
-	FaultSuppressedConnReset  uint64
-	FaultLogged               uint64
-	Errors                    int64
+	At                            time.Time
+	Goroutines                    int
+	HeapAlloc                     uint64
+	HeapObjects                   uint64
+	SessionsTotal                 int
+	SessionsActive                int
+	SessionsExpired               int
+	Nodes                         int
+	NodePaths                     int
+	DirCursors                    int
+	Handles                       int
+	AttrCache                     int
+	NegativeCache                 int
+	DirSnapshots                  int
+	SmallFileCache                int
+	WatchEvents                   int64
+	Watches                       int
+	Events                        int
+	LatestSeq                     uint64
+	OldestSeq                     uint64
+	MaxBacklog                    int
+	TotalBacklog                  int
+	MetadataReadAcquires          uint64
+	MetadataReadWaitOver50us      uint64
+	MetadataReadWaitOver1ms       uint64
+	MetadataReadTotalWaitNS       uint64
+	MetadataReadMaxWaitNS         uint64
+	MetadataWriteAcquires         uint64
+	MetadataWriteWaitOver50us     uint64
+	MetadataWriteWaitOver1ms      uint64
+	MetadataWriteTotalWaitNS      uint64
+	MetadataWriteMaxWaitNS        uint64
+	MetadataWriteHoldCount        uint64
+	MetadataWriteHoldOver1ms      uint64
+	MetadataWriteHoldMaxNS        uint64
+	MetadataDirRefreshCount       uint64
+	MetadataDirRefreshOver1ms     uint64
+	MetadataDirRefreshOver10ms    uint64
+	MetadataDirRefreshMaxNS       uint64
+	MetadataDirPatchCount         uint64
+	MetadataDirPatchOver1ms       uint64
+	MetadataDirPatchMaxNS         uint64
+	MetadataCachePruneCount       uint64
+	MetadataCachePruneOver1ms     uint64
+	MetadataCachePruneMaxNS       uint64
+	MetadataWriteSyscallCount     uint64
+	MetadataWriteSyscallOver1ms   uint64
+	MetadataWriteSyscallMaxNS     uint64
+	MetadataWriteFinalizeCount    uint64
+	MetadataWriteFinalizeOver1ms  uint64
+	MetadataWriteFinalizeMaxNS    uint64
+	MetadataFlushSyncCount        uint64
+	MetadataFlushSyncOver1ms      uint64
+	MetadataFlushSyncOver10ms     uint64
+	MetadataFlushSyncMaxNS        uint64
+	MetadataFlushFinalizeCount    uint64
+	MetadataFlushFinalizeOver1ms  uint64
+	MetadataFlushFinalizeMaxNS    uint64
+	MetadataRenamePrecheckCount   uint64
+	MetadataRenamePrecheckOver1ms uint64
+	MetadataRenamePrecheckMaxNS   uint64
+	MetadataRenameSyscallCount    uint64
+	MetadataRenameSyscallOver1ms  uint64
+	MetadataRenameSyscallOver10ms uint64
+	MetadataRenameSyscallMaxNS    uint64
+	MetadataRenameFinalizeCount   uint64
+	MetadataRenameFinalizeOver1ms uint64
+	MetadataRenameFinalizeMaxNS   uint64
+	SessionReadAcquires           uint64
+	SessionReadWaitOver50us       uint64
+	SessionReadWaitOver1ms        uint64
+	SessionReadTotalWaitNS        uint64
+	SessionReadMaxWaitNS          uint64
+	SessionWriteAcquires          uint64
+	SessionWriteWaitOver50us      uint64
+	SessionWriteWaitOver1ms       uint64
+	SessionWriteTotalWaitNS       uint64
+	SessionWriteMaxWaitNS         uint64
+	JournalReadAcquires           uint64
+	JournalReadWaitOver50us       uint64
+	JournalReadWaitOver1ms        uint64
+	JournalReadTotalWaitNS        uint64
+	JournalReadMaxWaitNS          uint64
+	JournalWriteAcquires          uint64
+	JournalWriteWaitOver50us      uint64
+	JournalWriteWaitOver1ms       uint64
+	JournalWriteTotalWaitNS       uint64
+	JournalWriteMaxWaitNS         uint64
+	ControlHelloCount             uint64
+	ControlHelloErrors            uint64
+	ControlHelloMaxWaitNS         uint64
+	ControlAuthCount              uint64
+	ControlAuthErrors             uint64
+	ControlAuthMaxWaitNS          uint64
+	ControlCreateCount            uint64
+	ControlCreateErrors           uint64
+	ControlCreateMaxWaitNS        uint64
+	ControlResumeCount            uint64
+	ControlResumeErrors           uint64
+	ControlResumeMaxWaitNS        uint64
+	ControlHeartbeatCount         uint64
+	ControlHeartbeatErrors        uint64
+	ControlHeartbeatMaxWaitNS     uint64
+	FaultSuppressedNetClosed      uint64
+	FaultSuppressedEOF            uint64
+	FaultSuppressedUnexpected     uint64
+	FaultSuppressedBrokenPipe     uint64
+	FaultSuppressedConnReset      uint64
+	FaultLogged                   uint64
+	Errors                        int64
 }
 
 type reportData struct {
@@ -285,80 +322,116 @@ loop:
 			runtime.ReadMemStats(&ms)
 			snap := srv.SnapshotRuntime(time.Now())
 			samples = append(samples, sample{
-				At:                        snap.At,
-				Goroutines:                runtime.NumGoroutine(),
-				HeapAlloc:                 ms.HeapAlloc,
-				HeapObjects:               ms.HeapObjects,
-				SessionsTotal:             snap.Sessions.Total,
-				SessionsActive:            snap.Sessions.Active,
-				SessionsExpired:           snap.Sessions.Expired,
-				Nodes:                     snap.Metadata.Nodes,
-				NodePaths:                 snap.Metadata.NodePaths,
-				DirCursors:                snap.Metadata.DirCursors,
-				Handles:                   snap.Metadata.Handles,
-				AttrCache:                 snap.Metadata.AttrCache,
-				NegativeCache:             snap.Metadata.NegativeCache,
-				DirSnapshots:              snap.Metadata.DirSnapshots,
-				SmallFileCache:            snap.Metadata.SmallFileCache,
-				WatchEvents:               watchEvents.Load(),
-				Watches:                   snap.Journal.Watches,
-				Events:                    snap.Journal.Events,
-				LatestSeq:                 snap.Journal.LatestSeq,
-				OldestSeq:                 snap.Journal.OldestSeq,
-				MaxBacklog:                snap.Journal.MaxWatchBacklog,
-				TotalBacklog:              snap.Journal.TotalBacklog,
-				MetadataReadAcquires:      snap.Metadata.Locks.Read.Acquires,
-				MetadataReadWaitOver50us:  snap.Metadata.Locks.Read.WaitOver50us,
-				MetadataReadWaitOver1ms:   snap.Metadata.Locks.Read.WaitOver1ms,
-				MetadataReadTotalWaitNS:   uint64(snap.Metadata.Locks.Read.TotalWait),
-				MetadataReadMaxWaitNS:     uint64(snap.Metadata.Locks.Read.MaxWait),
-				MetadataWriteAcquires:     snap.Metadata.Locks.Write.Acquires,
-				MetadataWriteWaitOver50us: snap.Metadata.Locks.Write.WaitOver50us,
-				MetadataWriteWaitOver1ms:  snap.Metadata.Locks.Write.WaitOver1ms,
-				MetadataWriteTotalWaitNS:  uint64(snap.Metadata.Locks.Write.TotalWait),
-				MetadataWriteMaxWaitNS:    uint64(snap.Metadata.Locks.Write.MaxWait),
-				SessionReadAcquires:       snap.Sessions.Locks.Read.Acquires,
-				SessionReadWaitOver50us:   snap.Sessions.Locks.Read.WaitOver50us,
-				SessionReadWaitOver1ms:    snap.Sessions.Locks.Read.WaitOver1ms,
-				SessionReadTotalWaitNS:    uint64(snap.Sessions.Locks.Read.TotalWait),
-				SessionReadMaxWaitNS:      uint64(snap.Sessions.Locks.Read.MaxWait),
-				SessionWriteAcquires:      snap.Sessions.Locks.Write.Acquires,
-				SessionWriteWaitOver50us:  snap.Sessions.Locks.Write.WaitOver50us,
-				SessionWriteWaitOver1ms:   snap.Sessions.Locks.Write.WaitOver1ms,
-				SessionWriteTotalWaitNS:   uint64(snap.Sessions.Locks.Write.TotalWait),
-				SessionWriteMaxWaitNS:     uint64(snap.Sessions.Locks.Write.MaxWait),
-				JournalReadAcquires:       snap.Journal.Locks.Read.Acquires,
-				JournalReadWaitOver50us:   snap.Journal.Locks.Read.WaitOver50us,
-				JournalReadWaitOver1ms:    snap.Journal.Locks.Read.WaitOver1ms,
-				JournalReadTotalWaitNS:    uint64(snap.Journal.Locks.Read.TotalWait),
-				JournalReadMaxWaitNS:      uint64(snap.Journal.Locks.Read.MaxWait),
-				JournalWriteAcquires:      snap.Journal.Locks.Write.Acquires,
-				JournalWriteWaitOver50us:  snap.Journal.Locks.Write.WaitOver50us,
-				JournalWriteWaitOver1ms:   snap.Journal.Locks.Write.WaitOver1ms,
-				JournalWriteTotalWaitNS:   uint64(snap.Journal.Locks.Write.TotalWait),
-				JournalWriteMaxWaitNS:     uint64(snap.Journal.Locks.Write.MaxWait),
-				ControlHelloCount:         snap.Control.Hello.Count,
-				ControlHelloErrors:        snap.Control.Hello.Errors,
-				ControlHelloMaxWaitNS:     uint64(snap.Control.Hello.MaxWait),
-				ControlAuthCount:          snap.Control.Auth.Count,
-				ControlAuthErrors:         snap.Control.Auth.Errors,
-				ControlAuthMaxWaitNS:      uint64(snap.Control.Auth.MaxWait),
-				ControlCreateCount:        snap.Control.CreateSession.Count,
-				ControlCreateErrors:       snap.Control.CreateSession.Errors,
-				ControlCreateMaxWaitNS:    uint64(snap.Control.CreateSession.MaxWait),
-				ControlResumeCount:        snap.Control.ResumeSession.Count,
-				ControlResumeErrors:       snap.Control.ResumeSession.Errors,
-				ControlResumeMaxWaitNS:    uint64(snap.Control.ResumeSession.MaxWait),
-				ControlHeartbeatCount:     snap.Control.Heartbeat.Count,
-				ControlHeartbeatErrors:    snap.Control.Heartbeat.Errors,
-				ControlHeartbeatMaxWaitNS: uint64(snap.Control.Heartbeat.MaxWait),
-				FaultSuppressedNetClosed:  snap.Faults.SuppressedNetClosed,
-				FaultSuppressedEOF:        snap.Faults.SuppressedEOF,
-				FaultSuppressedUnexpected: snap.Faults.SuppressedUnexpectedEOF,
-				FaultSuppressedBrokenPipe: snap.Faults.SuppressedBrokenPipe,
-				FaultSuppressedConnReset:  snap.Faults.SuppressedConnReset,
-				FaultLogged:               snap.Faults.Logged,
-				Errors:                    errorsSeen.Load(),
+				At:                            snap.At,
+				Goroutines:                    runtime.NumGoroutine(),
+				HeapAlloc:                     ms.HeapAlloc,
+				HeapObjects:                   ms.HeapObjects,
+				SessionsTotal:                 snap.Sessions.Total,
+				SessionsActive:                snap.Sessions.Active,
+				SessionsExpired:               snap.Sessions.Expired,
+				Nodes:                         snap.Metadata.Nodes,
+				NodePaths:                     snap.Metadata.NodePaths,
+				DirCursors:                    snap.Metadata.DirCursors,
+				Handles:                       snap.Metadata.Handles,
+				AttrCache:                     snap.Metadata.AttrCache,
+				NegativeCache:                 snap.Metadata.NegativeCache,
+				DirSnapshots:                  snap.Metadata.DirSnapshots,
+				SmallFileCache:                snap.Metadata.SmallFileCache,
+				WatchEvents:                   watchEvents.Load(),
+				Watches:                       snap.Journal.Watches,
+				Events:                        snap.Journal.Events,
+				LatestSeq:                     snap.Journal.LatestSeq,
+				OldestSeq:                     snap.Journal.OldestSeq,
+				MaxBacklog:                    snap.Journal.MaxWatchBacklog,
+				TotalBacklog:                  snap.Journal.TotalBacklog,
+				MetadataReadAcquires:          snap.Metadata.Locks.Read.Acquires,
+				MetadataReadWaitOver50us:      snap.Metadata.Locks.Read.WaitOver50us,
+				MetadataReadWaitOver1ms:       snap.Metadata.Locks.Read.WaitOver1ms,
+				MetadataReadTotalWaitNS:       uint64(snap.Metadata.Locks.Read.TotalWait),
+				MetadataReadMaxWaitNS:         uint64(snap.Metadata.Locks.Read.MaxWait),
+				MetadataWriteAcquires:         snap.Metadata.Locks.Write.Acquires,
+				MetadataWriteWaitOver50us:     snap.Metadata.Locks.Write.WaitOver50us,
+				MetadataWriteWaitOver1ms:      snap.Metadata.Locks.Write.WaitOver1ms,
+				MetadataWriteTotalWaitNS:      uint64(snap.Metadata.Locks.Write.TotalWait),
+				MetadataWriteMaxWaitNS:        uint64(snap.Metadata.Locks.Write.MaxWait),
+				MetadataWriteHoldCount:        snap.Metadata.Locks.WriteHold.Count,
+				MetadataWriteHoldOver1ms:      snap.Metadata.Locks.WriteHold.Over1ms,
+				MetadataWriteHoldMaxNS:        uint64(snap.Metadata.Locks.WriteHold.Max),
+				MetadataDirRefreshCount:       snap.Metadata.Diagnostics.DirRefresh.Count,
+				MetadataDirRefreshOver1ms:     snap.Metadata.Diagnostics.DirRefresh.Over1ms,
+				MetadataDirRefreshOver10ms:    snap.Metadata.Diagnostics.DirRefresh.Over10ms,
+				MetadataDirRefreshMaxNS:       uint64(snap.Metadata.Diagnostics.DirRefresh.Max),
+				MetadataDirPatchCount:         snap.Metadata.Diagnostics.DirPatch.Count,
+				MetadataDirPatchOver1ms:       snap.Metadata.Diagnostics.DirPatch.Over1ms,
+				MetadataDirPatchMaxNS:         uint64(snap.Metadata.Diagnostics.DirPatch.Max),
+				MetadataCachePruneCount:       snap.Metadata.Diagnostics.CachePrune.Count,
+				MetadataCachePruneOver1ms:     snap.Metadata.Diagnostics.CachePrune.Over1ms,
+				MetadataCachePruneMaxNS:       uint64(snap.Metadata.Diagnostics.CachePrune.Max),
+				MetadataWriteSyscallCount:     snap.Metadata.Diagnostics.WriteSyscall.Count,
+				MetadataWriteSyscallOver1ms:   snap.Metadata.Diagnostics.WriteSyscall.Over1ms,
+				MetadataWriteSyscallMaxNS:     uint64(snap.Metadata.Diagnostics.WriteSyscall.Max),
+				MetadataWriteFinalizeCount:    snap.Metadata.Diagnostics.WriteFinalize.Count,
+				MetadataWriteFinalizeOver1ms:  snap.Metadata.Diagnostics.WriteFinalize.Over1ms,
+				MetadataWriteFinalizeMaxNS:    uint64(snap.Metadata.Diagnostics.WriteFinalize.Max),
+				MetadataFlushSyncCount:        snap.Metadata.Diagnostics.FlushSync.Count,
+				MetadataFlushSyncOver1ms:      snap.Metadata.Diagnostics.FlushSync.Over1ms,
+				MetadataFlushSyncOver10ms:     snap.Metadata.Diagnostics.FlushSync.Over10ms,
+				MetadataFlushSyncMaxNS:        uint64(snap.Metadata.Diagnostics.FlushSync.Max),
+				MetadataFlushFinalizeCount:    snap.Metadata.Diagnostics.FlushFinalize.Count,
+				MetadataFlushFinalizeOver1ms:  snap.Metadata.Diagnostics.FlushFinalize.Over1ms,
+				MetadataFlushFinalizeMaxNS:    uint64(snap.Metadata.Diagnostics.FlushFinalize.Max),
+				MetadataRenamePrecheckCount:   snap.Metadata.Diagnostics.RenamePrecheck.Count,
+				MetadataRenamePrecheckOver1ms: snap.Metadata.Diagnostics.RenamePrecheck.Over1ms,
+				MetadataRenamePrecheckMaxNS:   uint64(snap.Metadata.Diagnostics.RenamePrecheck.Max),
+				MetadataRenameSyscallCount:    snap.Metadata.Diagnostics.RenameSyscall.Count,
+				MetadataRenameSyscallOver1ms:  snap.Metadata.Diagnostics.RenameSyscall.Over1ms,
+				MetadataRenameSyscallOver10ms: snap.Metadata.Diagnostics.RenameSyscall.Over10ms,
+				MetadataRenameSyscallMaxNS:    uint64(snap.Metadata.Diagnostics.RenameSyscall.Max),
+				MetadataRenameFinalizeCount:   snap.Metadata.Diagnostics.RenameFinalize.Count,
+				MetadataRenameFinalizeOver1ms: snap.Metadata.Diagnostics.RenameFinalize.Over1ms,
+				MetadataRenameFinalizeMaxNS:   uint64(snap.Metadata.Diagnostics.RenameFinalize.Max),
+				SessionReadAcquires:           snap.Sessions.Locks.Read.Acquires,
+				SessionReadWaitOver50us:       snap.Sessions.Locks.Read.WaitOver50us,
+				SessionReadWaitOver1ms:        snap.Sessions.Locks.Read.WaitOver1ms,
+				SessionReadTotalWaitNS:        uint64(snap.Sessions.Locks.Read.TotalWait),
+				SessionReadMaxWaitNS:          uint64(snap.Sessions.Locks.Read.MaxWait),
+				SessionWriteAcquires:          snap.Sessions.Locks.Write.Acquires,
+				SessionWriteWaitOver50us:      snap.Sessions.Locks.Write.WaitOver50us,
+				SessionWriteWaitOver1ms:       snap.Sessions.Locks.Write.WaitOver1ms,
+				SessionWriteTotalWaitNS:       uint64(snap.Sessions.Locks.Write.TotalWait),
+				SessionWriteMaxWaitNS:         uint64(snap.Sessions.Locks.Write.MaxWait),
+				JournalReadAcquires:           snap.Journal.Locks.Read.Acquires,
+				JournalReadWaitOver50us:       snap.Journal.Locks.Read.WaitOver50us,
+				JournalReadWaitOver1ms:        snap.Journal.Locks.Read.WaitOver1ms,
+				JournalReadTotalWaitNS:        uint64(snap.Journal.Locks.Read.TotalWait),
+				JournalReadMaxWaitNS:          uint64(snap.Journal.Locks.Read.MaxWait),
+				JournalWriteAcquires:          snap.Journal.Locks.Write.Acquires,
+				JournalWriteWaitOver50us:      snap.Journal.Locks.Write.WaitOver50us,
+				JournalWriteWaitOver1ms:       snap.Journal.Locks.Write.WaitOver1ms,
+				JournalWriteTotalWaitNS:       uint64(snap.Journal.Locks.Write.TotalWait),
+				JournalWriteMaxWaitNS:         uint64(snap.Journal.Locks.Write.MaxWait),
+				ControlHelloCount:             snap.Control.Hello.Count,
+				ControlHelloErrors:            snap.Control.Hello.Errors,
+				ControlHelloMaxWaitNS:         uint64(snap.Control.Hello.MaxWait),
+				ControlAuthCount:              snap.Control.Auth.Count,
+				ControlAuthErrors:             snap.Control.Auth.Errors,
+				ControlAuthMaxWaitNS:          uint64(snap.Control.Auth.MaxWait),
+				ControlCreateCount:            snap.Control.CreateSession.Count,
+				ControlCreateErrors:           snap.Control.CreateSession.Errors,
+				ControlCreateMaxWaitNS:        uint64(snap.Control.CreateSession.MaxWait),
+				ControlResumeCount:            snap.Control.ResumeSession.Count,
+				ControlResumeErrors:           snap.Control.ResumeSession.Errors,
+				ControlResumeMaxWaitNS:        uint64(snap.Control.ResumeSession.MaxWait),
+				ControlHeartbeatCount:         snap.Control.Heartbeat.Count,
+				ControlHeartbeatErrors:        snap.Control.Heartbeat.Errors,
+				ControlHeartbeatMaxWaitNS:     uint64(snap.Control.Heartbeat.MaxWait),
+				FaultSuppressedNetClosed:      snap.Faults.SuppressedNetClosed,
+				FaultSuppressedEOF:            snap.Faults.SuppressedEOF,
+				FaultSuppressedUnexpected:     snap.Faults.SuppressedUnexpectedEOF,
+				FaultSuppressedBrokenPipe:     snap.Faults.SuppressedBrokenPipe,
+				FaultSuppressedConnReset:      snap.Faults.SuppressedConnReset,
+				FaultLogged:                   snap.Faults.Logged,
+				Errors:                        errorsSeen.Load(),
 			})
 		}
 	}
@@ -430,8 +503,89 @@ func connectClient(addr, clientInstanceID string, metrics *metricStore) (*client
 	return cli, nil
 }
 
-func resumeClient(addr string, sessionID uint64, clientInstanceID string, metrics *metricStore) (*client.Client, error) {
+func reconnectSession(addr, clientInstanceID string, metrics *metricStore) (uint64, error) {
+	cli, err := connectClient(addr, clientInstanceID, metrics)
+	if err != nil {
+		return 0, err
+	}
+	sessionID := cli.SessionID
+	_ = cli.Close()
+	return sessionID, nil
+}
+
+func sessionRenewInterval(cli *client.Client) time.Duration {
+	leaseSeconds := cli.SnapshotState().LeaseSeconds
+	if leaseSeconds == 0 {
+		return 90 * time.Second
+	}
+	interval := time.Duration(leaseSeconds) * time.Second / 3
+	if interval < 5*time.Second {
+		interval = 5 * time.Second
+	}
+	if interval > 90*time.Second {
+		interval = 90 * time.Second
+	}
+	return interval
+}
+
+func maybeRenewSession(cli *client.Client, lastRenew *time.Time, metrics *metricStore) error {
+	if lastRenew == nil {
+		return nil
+	}
+	if time.Since(*lastRenew) < sessionRenewInterval(cli) {
+		return nil
+	}
+	started := time.Now()
+	_, err := cli.Heartbeat()
+	metrics.add("lease_heartbeat", time.Since(started))
+	if err != nil {
+		return err
+	}
+	*lastRenew = time.Now()
+	return nil
+}
+
+func isRetryableDialError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "only one usage of each socket address") ||
+		strings.Contains(msg, "address already in use") ||
+		strings.Contains(msg, "cannot assign requested address")
+}
+
+func isSessionResetError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, string(protocol.ErrSessionExpired)) ||
+		strings.Contains(msg, string(protocol.ErrSessionNotFound))
+}
+
+func dialShortLivedConn(ctx context.Context, addr string) (net.Conn, error) {
+	dialer := &net.Dialer{Timeout: 2 * time.Second}
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	if tcp, ok := conn.(*net.TCPConn); ok {
+		_ = tcp.SetNoDelay(true)
+		_ = tcp.SetLinger(0)
+	}
+	return conn, nil
+}
+
+func resumeClient(ctx context.Context, addr string, sessionID uint64, clientInstanceID string, metrics *metricStore) (*client.Client, error) {
 	cli := client.New(addr)
+	cli.Dial = func(network, address string) (net.Conn, error) {
+		return dialShortLivedConn(ctx, address)
+	}
 	if err := cli.Connect(); err != nil {
 		return nil, err
 	}
@@ -465,10 +619,14 @@ func browseWorker(ctx context.Context, addr, id string, metrics *metricStore) er
 		return err
 	}
 	defer cli.Close()
+	lastRenew := time.Now()
 	targets := []string{"README.md", "package.json", "src/main.go", "src/lib/util.go", "docs/architecture/overview.md"}
 	dirs := []string{"", "src", "src/lib", "docs", "configs"}
 	iter := 0
 	for ctx.Err() == nil {
+		if err := maybeRenewSession(cli, &lastRenew, metrics); err != nil {
+			return fmt.Errorf("%s lease_heartbeat: %w", id, err)
+		}
 		name := targets[iter%len(targets)]
 		dir := dirs[iter%len(dirs)]
 		var parentID uint64 = cli.RootNodeID
@@ -493,8 +651,15 @@ func browseWorker(ctx context.Context, addr, id string, metrics *metricStore) er
 		listing, err := cli.ReadDir(dirResp.DirCursorID, 0, 64)
 		metrics.add("readdir", time.Since(started))
 		if err != nil {
+			_, _ = cli.CloseDir(dirResp.DirCursorID)
 			return fmt.Errorf("%s readdir(%s): %w", id, dir, err)
 		}
+		started = time.Now()
+		if _, err := cli.CloseDir(dirResp.DirCursorID); err != nil {
+			metrics.add("close_dir", time.Since(started))
+			return fmt.Errorf("%s close_dir(%s): %w", id, dir, err)
+		}
+		metrics.add("close_dir", time.Since(started))
 		if len(listing.Entries) == 0 {
 			return fmt.Errorf("%s readdir(%s): empty listing", id, dir)
 		}
@@ -556,8 +721,12 @@ func saveWorker(ctx context.Context, addr, id string, metrics *metricStore) erro
 		return err
 	}
 	defer cli.Close()
+	lastRenew := time.Now()
 	iter := 0
 	for ctx.Err() == nil {
+		if err := maybeRenewSession(cli, &lastRenew, metrics); err != nil {
+			return fmt.Errorf("%s lease_heartbeat: %w", id, err)
+		}
 		tmpName := fmt.Sprintf("%s-%04d.tmp", id, iter)
 		finalName := fmt.Sprintf("%s-%04d.txt", id, iter)
 		parts := []string{fmt.Sprintf("worker=%s\n", id), fmt.Sprintf("iter=%d\n", iter), "payload=line-1\n", "payload=line-2\n"}
@@ -646,17 +815,27 @@ func heartbeatWorker(ctx context.Context, addr, id string, metrics *metricStore)
 }
 
 func resumeWorker(ctx context.Context, addr, id string, metrics *metricStore) error {
-	cli, err := connectClient(addr, id, metrics)
+	sessionID, err := reconnectSession(addr, id, metrics)
 	if err != nil {
 		return err
 	}
-	sessionID := cli.SessionID
-	_ = cli.Close()
 	for ctx.Err() == nil {
 		started := time.Now()
-		resumed, err := resumeClient(addr, sessionID, id, metrics)
+		resumed, err := resumeClient(ctx, addr, sessionID, id, metrics)
 		metrics.add("resume_connect", time.Since(started))
 		if err != nil {
+			if isRetryableDialError(err) {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if isSessionResetError(err) {
+				sessionID, err = reconnectSession(addr, id, metrics)
+				if err != nil {
+					return fmt.Errorf("%s recreate_session: %w", id, err)
+				}
+				time.Sleep(50 * time.Millisecond)
+				continue
+			}
 			return fmt.Errorf("%s resume_connect: %w", id, err)
 		}
 		started = time.Now()
@@ -698,7 +877,11 @@ func resumeWorker(ctx context.Context, addr, id string, metrics *metricStore) er
 }
 
 func watchWorker(ctx context.Context, cli *client.Client, watchID, after uint64, metrics *metricStore, counter *atomic.Int64) error {
+	lastRenew := time.Now()
 	for ctx.Err() == nil {
+		if err := maybeRenewSession(cli, &lastRenew, metrics); err != nil {
+			return fmt.Errorf("watch lease_heartbeat: %w", err)
+		}
 		started := time.Now()
 		poll, err := cli.PollEvents(watchID, after, 512)
 		metrics.add("watch_poll", time.Since(started))
@@ -721,8 +904,12 @@ func watchWorker(ctx context.Context, cli *client.Client, watchID, after uint64,
 func slowFrameWorker(ctx context.Context, addr string, metrics *metricStore) error {
 	reqID := uint64(900000)
 	for ctx.Err() == nil {
-		conn, err := net.Dial("tcp", addr)
+		conn, err := dialShortLivedConn(ctx, addr)
 		if err != nil {
+			if isRetryableDialError(err) {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			return err
 		}
 		frame, err := transport.EncodeFrame(protocol.Header{Channel: protocol.ChannelControl, Opcode: protocol.OpcodeHelloReq, Flags: protocol.FlagRequest, RequestID: reqID}, protocol.HelloReq{ClientName: "fault-slow", ClientVersion: "0", SupportedProtocolVersions: []uint8{protocol.Version}, Capabilities: protocol.DefaultCapabilities()})
@@ -750,8 +937,12 @@ func slowFrameWorker(ctx context.Context, addr string, metrics *metricStore) err
 func halfCloseWorker(ctx context.Context, addr string, metrics *metricStore) error {
 	reqID := uint64(910000)
 	for ctx.Err() == nil {
-		conn, err := net.Dial("tcp", addr)
+		conn, err := dialShortLivedConn(ctx, addr)
 		if err != nil {
+			if isRetryableDialError(err) {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			return err
 		}
 		frame, err := transport.EncodeFrame(protocol.Header{Channel: protocol.ChannelControl, Opcode: protocol.OpcodeHelloReq, Flags: protocol.FlagRequest, RequestID: reqID}, protocol.HelloReq{ClientName: "fault-halfclose", ClientVersion: "0", SupportedProtocolVersions: []uint8{protocol.Version}, Capabilities: protocol.DefaultCapabilities()})
@@ -781,8 +972,12 @@ func halfCloseWorker(ctx context.Context, addr string, metrics *metricStore) err
 func delayedFrameWorker(ctx context.Context, addr string, metrics *metricStore) error {
 	reqID := uint64(920000)
 	for ctx.Err() == nil {
-		conn, err := net.Dial("tcp", addr)
+		conn, err := dialShortLivedConn(ctx, addr)
 		if err != nil {
+			if isRetryableDialError(err) {
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
 			return err
 		}
 		frame, err := transport.EncodeFrame(protocol.Header{Channel: protocol.ChannelControl, Opcode: protocol.OpcodeHelloReq, Flags: protocol.FlagRequest, RequestID: reqID}, protocol.HelloReq{ClientName: "fault-delayed", ClientVersion: "0", SupportedProtocolVersions: []uint8{protocol.Version}, Capabilities: protocol.DefaultCapabilities()})
@@ -816,12 +1011,12 @@ func writeCSV(path string, samples []sample) error {
 	defer f.Close()
 	w := csv.NewWriter(f)
 	defer w.Flush()
-	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "session_read_acquires", "session_read_wait_over_50us", "session_read_wait_over_1ms", "session_read_total_wait_ns", "session_read_max_wait_ns", "session_write_acquires", "session_write_wait_over_50us", "session_write_wait_over_1ms", "session_write_total_wait_ns", "session_write_max_wait_ns", "journal_read_acquires", "journal_read_wait_over_50us", "journal_read_wait_over_1ms", "journal_read_total_wait_ns", "journal_read_max_wait_ns", "journal_write_acquires", "journal_write_wait_over_50us", "journal_write_wait_over_1ms", "journal_write_total_wait_ns", "journal_write_max_wait_ns", "control_hello_count", "control_hello_errors", "control_hello_max_wait_ns", "control_auth_count", "control_auth_errors", "control_auth_max_wait_ns", "control_create_count", "control_create_errors", "control_create_max_wait_ns", "control_resume_count", "control_resume_errors", "control_resume_max_wait_ns", "control_heartbeat_count", "control_heartbeat_errors", "control_heartbeat_max_wait_ns", "fault_suppressed_net_closed", "fault_suppressed_eof", "fault_suppressed_unexpected_eof", "fault_suppressed_broken_pipe", "fault_suppressed_conn_reset", "fault_logged", "errors"}
+	header := []string{"at", "goroutines", "heap_alloc", "heap_objects", "sessions_total", "sessions_active", "sessions_expired", "nodes", "node_paths", "dir_cursors", "handles", "attr_cache", "negative_cache", "dir_snapshots", "small_file_cache", "watch_events", "watches", "events", "latest_seq", "oldest_seq", "max_backlog", "total_backlog", "metadata_read_acquires", "metadata_read_wait_over_50us", "metadata_read_wait_over_1ms", "metadata_read_total_wait_ns", "metadata_read_max_wait_ns", "metadata_write_acquires", "metadata_write_wait_over_50us", "metadata_write_wait_over_1ms", "metadata_write_total_wait_ns", "metadata_write_max_wait_ns", "metadata_write_hold_count", "metadata_write_hold_over_1ms", "metadata_write_hold_max_ns", "metadata_dir_refresh_count", "metadata_dir_refresh_over_1ms", "metadata_dir_refresh_over_10ms", "metadata_dir_refresh_max_ns", "metadata_dir_patch_count", "metadata_dir_patch_over_1ms", "metadata_dir_patch_max_ns", "metadata_cache_prune_count", "metadata_cache_prune_over_1ms", "metadata_cache_prune_max_ns", "metadata_write_syscall_count", "metadata_write_syscall_over_1ms", "metadata_write_syscall_max_ns", "metadata_write_finalize_count", "metadata_write_finalize_over_1ms", "metadata_write_finalize_max_ns", "metadata_flush_sync_count", "metadata_flush_sync_over_1ms", "metadata_flush_sync_over_10ms", "metadata_flush_sync_max_ns", "metadata_flush_finalize_count", "metadata_flush_finalize_over_1ms", "metadata_flush_finalize_max_ns", "metadata_rename_precheck_count", "metadata_rename_precheck_over_1ms", "metadata_rename_precheck_max_ns", "metadata_rename_syscall_count", "metadata_rename_syscall_over_1ms", "metadata_rename_syscall_over_10ms", "metadata_rename_syscall_max_ns", "metadata_rename_finalize_count", "metadata_rename_finalize_over_1ms", "metadata_rename_finalize_max_ns", "session_read_acquires", "session_read_wait_over_50us", "session_read_wait_over_1ms", "session_read_total_wait_ns", "session_read_max_wait_ns", "session_write_acquires", "session_write_wait_over_50us", "session_write_wait_over_1ms", "session_write_total_wait_ns", "session_write_max_wait_ns", "journal_read_acquires", "journal_read_wait_over_50us", "journal_read_wait_over_1ms", "journal_read_total_wait_ns", "journal_read_max_wait_ns", "journal_write_acquires", "journal_write_wait_over_50us", "journal_write_wait_over_1ms", "journal_write_total_wait_ns", "journal_write_max_wait_ns", "control_hello_count", "control_hello_errors", "control_hello_max_wait_ns", "control_auth_count", "control_auth_errors", "control_auth_max_wait_ns", "control_create_count", "control_create_errors", "control_create_max_wait_ns", "control_resume_count", "control_resume_errors", "control_resume_max_wait_ns", "control_heartbeat_count", "control_heartbeat_errors", "control_heartbeat_max_wait_ns", "fault_suppressed_net_closed", "fault_suppressed_eof", "fault_suppressed_unexpected_eof", "fault_suppressed_broken_pipe", "fault_suppressed_conn_reset", "fault_logged", "errors"}
 	if err := w.Write(header); err != nil {
 		return err
 	}
 	for _, s := range samples {
-		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.SessionReadAcquires), fmt.Sprint(s.SessionReadWaitOver50us), fmt.Sprint(s.SessionReadWaitOver1ms), fmt.Sprint(s.SessionReadTotalWaitNS), fmt.Sprint(s.SessionReadMaxWaitNS), fmt.Sprint(s.SessionWriteAcquires), fmt.Sprint(s.SessionWriteWaitOver50us), fmt.Sprint(s.SessionWriteWaitOver1ms), fmt.Sprint(s.SessionWriteTotalWaitNS), fmt.Sprint(s.SessionWriteMaxWaitNS), fmt.Sprint(s.JournalReadAcquires), fmt.Sprint(s.JournalReadWaitOver50us), fmt.Sprint(s.JournalReadWaitOver1ms), fmt.Sprint(s.JournalReadTotalWaitNS), fmt.Sprint(s.JournalReadMaxWaitNS), fmt.Sprint(s.JournalWriteAcquires), fmt.Sprint(s.JournalWriteWaitOver50us), fmt.Sprint(s.JournalWriteWaitOver1ms), fmt.Sprint(s.JournalWriteTotalWaitNS), fmt.Sprint(s.JournalWriteMaxWaitNS), fmt.Sprint(s.ControlHelloCount), fmt.Sprint(s.ControlHelloErrors), fmt.Sprint(s.ControlHelloMaxWaitNS), fmt.Sprint(s.ControlAuthCount), fmt.Sprint(s.ControlAuthErrors), fmt.Sprint(s.ControlAuthMaxWaitNS), fmt.Sprint(s.ControlCreateCount), fmt.Sprint(s.ControlCreateErrors), fmt.Sprint(s.ControlCreateMaxWaitNS), fmt.Sprint(s.ControlResumeCount), fmt.Sprint(s.ControlResumeErrors), fmt.Sprint(s.ControlResumeMaxWaitNS), fmt.Sprint(s.ControlHeartbeatCount), fmt.Sprint(s.ControlHeartbeatErrors), fmt.Sprint(s.ControlHeartbeatMaxWaitNS), fmt.Sprint(s.FaultSuppressedNetClosed), fmt.Sprint(s.FaultSuppressedEOF), fmt.Sprint(s.FaultSuppressedUnexpected), fmt.Sprint(s.FaultSuppressedBrokenPipe), fmt.Sprint(s.FaultSuppressedConnReset), fmt.Sprint(s.FaultLogged), fmt.Sprint(s.Errors)}
+		row := []string{s.At.Format(time.RFC3339), fmt.Sprint(s.Goroutines), fmt.Sprint(s.HeapAlloc), fmt.Sprint(s.HeapObjects), fmt.Sprint(s.SessionsTotal), fmt.Sprint(s.SessionsActive), fmt.Sprint(s.SessionsExpired), fmt.Sprint(s.Nodes), fmt.Sprint(s.NodePaths), fmt.Sprint(s.DirCursors), fmt.Sprint(s.Handles), fmt.Sprint(s.AttrCache), fmt.Sprint(s.NegativeCache), fmt.Sprint(s.DirSnapshots), fmt.Sprint(s.SmallFileCache), fmt.Sprint(s.WatchEvents), fmt.Sprint(s.Watches), fmt.Sprint(s.Events), fmt.Sprint(s.LatestSeq), fmt.Sprint(s.OldestSeq), fmt.Sprint(s.MaxBacklog), fmt.Sprint(s.TotalBacklog), fmt.Sprint(s.MetadataReadAcquires), fmt.Sprint(s.MetadataReadWaitOver50us), fmt.Sprint(s.MetadataReadWaitOver1ms), fmt.Sprint(s.MetadataReadTotalWaitNS), fmt.Sprint(s.MetadataReadMaxWaitNS), fmt.Sprint(s.MetadataWriteAcquires), fmt.Sprint(s.MetadataWriteWaitOver50us), fmt.Sprint(s.MetadataWriteWaitOver1ms), fmt.Sprint(s.MetadataWriteTotalWaitNS), fmt.Sprint(s.MetadataWriteMaxWaitNS), fmt.Sprint(s.MetadataWriteHoldCount), fmt.Sprint(s.MetadataWriteHoldOver1ms), fmt.Sprint(s.MetadataWriteHoldMaxNS), fmt.Sprint(s.MetadataDirRefreshCount), fmt.Sprint(s.MetadataDirRefreshOver1ms), fmt.Sprint(s.MetadataDirRefreshOver10ms), fmt.Sprint(s.MetadataDirRefreshMaxNS), fmt.Sprint(s.MetadataDirPatchCount), fmt.Sprint(s.MetadataDirPatchOver1ms), fmt.Sprint(s.MetadataDirPatchMaxNS), fmt.Sprint(s.MetadataCachePruneCount), fmt.Sprint(s.MetadataCachePruneOver1ms), fmt.Sprint(s.MetadataCachePruneMaxNS), fmt.Sprint(s.MetadataWriteSyscallCount), fmt.Sprint(s.MetadataWriteSyscallOver1ms), fmt.Sprint(s.MetadataWriteSyscallMaxNS), fmt.Sprint(s.MetadataWriteFinalizeCount), fmt.Sprint(s.MetadataWriteFinalizeOver1ms), fmt.Sprint(s.MetadataWriteFinalizeMaxNS), fmt.Sprint(s.MetadataFlushSyncCount), fmt.Sprint(s.MetadataFlushSyncOver1ms), fmt.Sprint(s.MetadataFlushSyncOver10ms), fmt.Sprint(s.MetadataFlushSyncMaxNS), fmt.Sprint(s.MetadataFlushFinalizeCount), fmt.Sprint(s.MetadataFlushFinalizeOver1ms), fmt.Sprint(s.MetadataFlushFinalizeMaxNS), fmt.Sprint(s.MetadataRenamePrecheckCount), fmt.Sprint(s.MetadataRenamePrecheckOver1ms), fmt.Sprint(s.MetadataRenamePrecheckMaxNS), fmt.Sprint(s.MetadataRenameSyscallCount), fmt.Sprint(s.MetadataRenameSyscallOver1ms), fmt.Sprint(s.MetadataRenameSyscallOver10ms), fmt.Sprint(s.MetadataRenameSyscallMaxNS), fmt.Sprint(s.MetadataRenameFinalizeCount), fmt.Sprint(s.MetadataRenameFinalizeOver1ms), fmt.Sprint(s.MetadataRenameFinalizeMaxNS), fmt.Sprint(s.SessionReadAcquires), fmt.Sprint(s.SessionReadWaitOver50us), fmt.Sprint(s.SessionReadWaitOver1ms), fmt.Sprint(s.SessionReadTotalWaitNS), fmt.Sprint(s.SessionReadMaxWaitNS), fmt.Sprint(s.SessionWriteAcquires), fmt.Sprint(s.SessionWriteWaitOver50us), fmt.Sprint(s.SessionWriteWaitOver1ms), fmt.Sprint(s.SessionWriteTotalWaitNS), fmt.Sprint(s.SessionWriteMaxWaitNS), fmt.Sprint(s.JournalReadAcquires), fmt.Sprint(s.JournalReadWaitOver50us), fmt.Sprint(s.JournalReadWaitOver1ms), fmt.Sprint(s.JournalReadTotalWaitNS), fmt.Sprint(s.JournalReadMaxWaitNS), fmt.Sprint(s.JournalWriteAcquires), fmt.Sprint(s.JournalWriteWaitOver50us), fmt.Sprint(s.JournalWriteWaitOver1ms), fmt.Sprint(s.JournalWriteTotalWaitNS), fmt.Sprint(s.JournalWriteMaxWaitNS), fmt.Sprint(s.ControlHelloCount), fmt.Sprint(s.ControlHelloErrors), fmt.Sprint(s.ControlHelloMaxWaitNS), fmt.Sprint(s.ControlAuthCount), fmt.Sprint(s.ControlAuthErrors), fmt.Sprint(s.ControlAuthMaxWaitNS), fmt.Sprint(s.ControlCreateCount), fmt.Sprint(s.ControlCreateErrors), fmt.Sprint(s.ControlCreateMaxWaitNS), fmt.Sprint(s.ControlResumeCount), fmt.Sprint(s.ControlResumeErrors), fmt.Sprint(s.ControlResumeMaxWaitNS), fmt.Sprint(s.ControlHeartbeatCount), fmt.Sprint(s.ControlHeartbeatErrors), fmt.Sprint(s.ControlHeartbeatMaxWaitNS), fmt.Sprint(s.FaultSuppressedNetClosed), fmt.Sprint(s.FaultSuppressedEOF), fmt.Sprint(s.FaultSuppressedUnexpected), fmt.Sprint(s.FaultSuppressedBrokenPipe), fmt.Sprint(s.FaultSuppressedConnReset), fmt.Sprint(s.FaultLogged), fmt.Sprint(s.Errors)}
 		if err := w.Write(row); err != nil {
 			return err
 		}
@@ -889,6 +1084,17 @@ func writeReport(path string, data reportData) error {
 		fmt.Fprintf(f, "- metadata read lock waits >1ms: first=%d peak=%d last=%d\n", first.MetadataReadWaitOver1ms, peakReadWait1ms, last.MetadataReadWaitOver1ms)
 		fmt.Fprintf(f, "- metadata write lock waits >50us: first=%d peak=%d last=%d\n", first.MetadataWriteWaitOver50us, peakWriteWait50us, last.MetadataWriteWaitOver50us)
 		fmt.Fprintf(f, "- metadata write lock waits >1ms: first=%d peak=%d last=%d\n", first.MetadataWriteWaitOver1ms, peakWriteWait1ms, last.MetadataWriteWaitOver1ms)
+		fmt.Fprintf(f, "- metadata write lock hold >1ms/max: %d/%s\n", last.MetadataWriteHoldOver1ms, time.Duration(last.MetadataWriteHoldMaxNS))
+		fmt.Fprintf(f, "- dir snapshot refresh count/>1ms/>10ms/max: %d/%d/%d/%s\n", last.MetadataDirRefreshCount, last.MetadataDirRefreshOver1ms, last.MetadataDirRefreshOver10ms, time.Duration(last.MetadataDirRefreshMaxNS))
+		fmt.Fprintf(f, "- dir snapshot patch count/>1ms/max: %d/%d/%s\n", last.MetadataDirPatchCount, last.MetadataDirPatchOver1ms, time.Duration(last.MetadataDirPatchMaxNS))
+		fmt.Fprintf(f, "- cache prune count/>1ms/max: %d/%d/%s\n", last.MetadataCachePruneCount, last.MetadataCachePruneOver1ms, time.Duration(last.MetadataCachePruneMaxNS))
+		fmt.Fprintf(f, "- write syscall count/>1ms/max: %d/%d/%s\n", last.MetadataWriteSyscallCount, last.MetadataWriteSyscallOver1ms, time.Duration(last.MetadataWriteSyscallMaxNS))
+		fmt.Fprintf(f, "- write finalize count/>1ms/max: %d/%d/%s\n", last.MetadataWriteFinalizeCount, last.MetadataWriteFinalizeOver1ms, time.Duration(last.MetadataWriteFinalizeMaxNS))
+		fmt.Fprintf(f, "- flush sync count/>1ms/>10ms/max: %d/%d/%d/%s\n", last.MetadataFlushSyncCount, last.MetadataFlushSyncOver1ms, last.MetadataFlushSyncOver10ms, time.Duration(last.MetadataFlushSyncMaxNS))
+		fmt.Fprintf(f, "- flush finalize count/>1ms/max: %d/%d/%s\n", last.MetadataFlushFinalizeCount, last.MetadataFlushFinalizeOver1ms, time.Duration(last.MetadataFlushFinalizeMaxNS))
+		fmt.Fprintf(f, "- rename precheck count/>1ms/max: %d/%d/%s\n", last.MetadataRenamePrecheckCount, last.MetadataRenamePrecheckOver1ms, time.Duration(last.MetadataRenamePrecheckMaxNS))
+		fmt.Fprintf(f, "- rename syscall count/>1ms/>10ms/max: %d/%d/%d/%s\n", last.MetadataRenameSyscallCount, last.MetadataRenameSyscallOver1ms, last.MetadataRenameSyscallOver10ms, time.Duration(last.MetadataRenameSyscallMaxNS))
+		fmt.Fprintf(f, "- rename finalize count/>1ms/max: %d/%d/%s\n", last.MetadataRenameFinalizeCount, last.MetadataRenameFinalizeOver1ms, time.Duration(last.MetadataRenameFinalizeMaxNS))
 		fmt.Fprintf(f, "- session write lock waits >1ms: first=%d last=%d\n", first.SessionWriteWaitOver1ms, last.SessionWriteWaitOver1ms)
 		fmt.Fprintf(f, "- journal write lock waits >1ms: first=%d last=%d\n", first.JournalWriteWaitOver1ms, last.JournalWriteWaitOver1ms)
 		fmt.Fprintf(f, "- control hello count/errors/max: %d/%d/%s\n", last.ControlHelloCount, last.ControlHelloErrors, time.Duration(last.ControlHelloMaxWaitNS))

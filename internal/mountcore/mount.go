@@ -22,6 +22,7 @@ type ProtocolClient interface {
 	GetAttr(nodeID uint64) (protocol.GetAttrResp, error)
 	OpenDir(nodeID uint64) (protocol.OpenDirResp, error)
 	ReadDir(dirCursorID uint64, cookie uint64, maxEntries uint32) (protocol.ReadDirResp, error)
+	CloseDir(dirCursorID uint64) (protocol.CloseDirResp, error)
 	OpenRead(nodeID uint64) (protocol.OpenResp, error)
 	Read(handleID uint64, offset int64, length uint32) (protocol.ReadResp, error)
 	CloseHandle(handleID uint64) (protocol.CloseResp, error)
@@ -238,9 +239,11 @@ func (m *Mount) Close(handleID uint64) error {
 		return err
 	}
 	if _, ok := m.directoryHandles[handleID]; ok {
+		h := m.directoryHandles[handleID]
 		delete(m.directoryHandles, handleID)
 		m.mu.Unlock()
-		return nil
+		_, err := m.client.CloseDir(h.RemoteCursorID)
+		return err
 	}
 	m.mu.Unlock()
 	return ErrInvalidHandle

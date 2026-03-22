@@ -15,15 +15,44 @@ $faultDelayedWrite = if ($env:FAULT_DELAYED_WRITE) { $env:FAULT_DELAYED_WRITE } 
 
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-go run ./cmd/devmount-soak `
-  -duration $duration `
-  -sample-interval $sampleInterval `
-  -browse-workers $browseWorkers `
-  -save-workers $saveWorkers `
-  -heartbeat-workers $heartbeatWorkers `
-  -resume-workers $resumeWorkers `
-  -fault-slow-client $(if ($faultSlowClient -eq '1') { 'true' } else { 'false' }) `
-  -fault-half-close $(if ($faultHalfClose -eq '1') { 'true' } else { 'false' }) `
-  -fault-delayed-write $(if ($faultDelayedWrite -eq '1') { 'true' } else { 'false' }) `
-  -csv (Join-Path $outDir 'sampled-soak-samples.csv') `
-  -report (Join-Path $outDir 'sampled-soak-report.md')
+$csvPath = Join-Path $outDir 'sampled-soak-samples.csv'
+$reportPath = Join-Path $outDir 'sampled-soak-report.md'
+$runLog = Join-Path $outDir 'sampled-soak-run.log'
+$stderrLog = Join-Path $outDir 'sampled-soak-run.stderr.log'
+
+$goArgs = @(
+  'run',
+  './cmd/devmount-soak',
+  '-duration', $duration,
+  '-sample-interval', $sampleInterval,
+  '-browse-workers', $browseWorkers,
+  '-save-workers', $saveWorkers,
+  '-heartbeat-workers', $heartbeatWorkers,
+  '-resume-workers', $resumeWorkers,
+  ('-fault-slow-client=' + $(if ($faultSlowClient -eq '1') { 'true' } else { 'false' })),
+  ('-fault-half-close=' + $(if ($faultHalfClose -eq '1') { 'true' } else { 'false' })),
+  ('-fault-delayed-write=' + $(if ($faultDelayedWrite -eq '1') { 'true' } else { 'false' })),
+  '-csv', $csvPath,
+  '-report', $reportPath
+)
+
+if (Test-Path $runLog) {
+  Remove-Item $runLog -Force
+}
+if (Test-Path $stderrLog) {
+  Remove-Item $stderrLog -Force
+}
+
+$goExe = (Get-Command go).Source
+$proc = Start-Process -FilePath $goExe -ArgumentList $goArgs -WorkingDirectory $root -NoNewWindow -Wait -PassThru -RedirectStandardOutput $runLog -RedirectStandardError $stderrLog
+
+if (Test-Path $stderrLog) {
+  Get-Content $stderrLog | Add-Content $runLog
+  Remove-Item $stderrLog -Force
+}
+
+Get-Content $runLog
+
+if ($proc.ExitCode -ne 0) {
+  throw "go run ./cmd/devmount-soak exited with code $($proc.ExitCode)"
+}

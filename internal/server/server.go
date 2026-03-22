@@ -310,6 +310,17 @@ func (s *Server) dispatchMetadata(conn net.Conn, header protocol.Header, payload
 			return
 		}
 		s.writeResponse(conn, header, protocol.OpcodeReadDirResp, header.SessionID, resp)
+	case protocol.OpcodeCloseDirReq:
+		req, err := transport.DecodePayload[protocol.CloseDirReq](payload)
+		if err != nil {
+			s.writeError(conn, header, protocol.ErrInvalidRequest, "invalid closedir payload", false, nil)
+			return
+		}
+		if err := s.Backend.CloseDir(req.DirCursorID); err != nil {
+			s.writeBackendError(conn, header, err)
+			return
+		}
+		s.writeResponse(conn, header, protocol.OpcodeCloseDirResp, header.SessionID, protocol.CloseDirResp{Closed: true})
 	case protocol.OpcodeRenameReq:
 		req, err := transport.DecodePayload[protocol.RenameReq](payload)
 		if err != nil {
@@ -639,7 +650,10 @@ func isExpectedConnectionError(err error) bool {
 		return true
 	}
 	lower := strings.ToLower(err.Error())
-	return strings.Contains(lower, "broken pipe") || strings.Contains(lower, "connection reset by peer") || strings.Contains(lower, "forcibly closed by the remote host")
+	return strings.Contains(lower, "broken pipe") ||
+		strings.Contains(lower, "connection reset by peer") ||
+		strings.Contains(lower, "forcibly closed by the remote host") ||
+		strings.Contains(lower, "software in your host machine")
 }
 
 func (s *Server) writeBackendError(conn net.Conn, reqHeader protocol.Header, err error) {

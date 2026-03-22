@@ -43,6 +43,19 @@ type MetadataCacheStats struct {
 	NormalPriorityPrefetches uint64
 }
 
+type MetadataDiagnosticsSnapshot struct {
+	DirRefresh     DurationSnapshot `json:"dir_refresh"`
+	DirPatch       DurationSnapshot `json:"dir_patch"`
+	CachePrune     DurationSnapshot `json:"cache_prune"`
+	WriteSyscall   DurationSnapshot `json:"write_syscall"`
+	WriteFinalize  DurationSnapshot `json:"write_finalize"`
+	FlushSync      DurationSnapshot `json:"flush_sync"`
+	FlushFinalize  DurationSnapshot `json:"flush_finalize"`
+	RenamePrecheck DurationSnapshot `json:"rename_precheck"`
+	RenameSyscall  DurationSnapshot `json:"rename_syscall"`
+	RenameFinalize DurationSnapshot `json:"rename_finalize"`
+}
+
 type metadataCacheStats struct {
 	attrHits                 atomic.Uint64
 	attrMisses               atomic.Uint64
@@ -58,6 +71,19 @@ type metadataCacheStats struct {
 	hotFilePrefetches        atomic.Uint64
 	highPriorityPrefetches   atomic.Uint64
 	normalPriorityPrefetches atomic.Uint64
+}
+
+type metadataDiagnostics struct {
+	dirRefresh     durationCounters
+	dirPatch       durationCounters
+	cachePrune     durationCounters
+	writeSyscall   durationCounters
+	writeFinalize  durationCounters
+	flushSync      durationCounters
+	flushFinalize  durationCounters
+	renamePrecheck durationCounters
+	renameSyscall  durationCounters
+	renameFinalize durationCounters
 }
 
 func (s *metadataCacheStats) snapshot() MetadataCacheStats {
@@ -76,5 +102,20 @@ func (s *metadataCacheStats) snapshot() MetadataCacheStats {
 		HotFilePrefetches:        s.hotFilePrefetches.Load(),
 		HighPriorityPrefetches:   s.highPriorityPrefetches.Load(),
 		NormalPriorityPrefetches: s.normalPriorityPrefetches.Load(),
+	}
+}
+
+func (d *metadataDiagnostics) snapshot() MetadataDiagnosticsSnapshot {
+	return MetadataDiagnosticsSnapshot{
+		DirRefresh:     d.dirRefresh.snapshot(),
+		DirPatch:       d.dirPatch.snapshot(),
+		CachePrune:     d.cachePrune.snapshot(),
+		WriteSyscall:   d.writeSyscall.snapshot(),
+		WriteFinalize:  d.writeFinalize.snapshot(),
+		FlushSync:      d.flushSync.snapshot(),
+		FlushFinalize:  d.flushFinalize.snapshot(),
+		RenamePrecheck: d.renamePrecheck.snapshot(),
+		RenameSyscall:  d.renameSyscall.snapshot(),
+		RenameFinalize: d.renameFinalize.snapshot(),
 	}
 }

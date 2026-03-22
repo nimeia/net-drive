@@ -20,17 +20,44 @@ $Report = Join-Path $OutDir 'stress-test-report.md'
 $IntegrationRun = 'TestRealisticMixedBrowseSaveWatchPressure|TestMultiClientConcurrentCreateWriteRenameAndWatch|TestHeartbeatInterleavesWithFileOperations|TestConnectionJitterRepeatedResumeAndRead'
 $BenchRun = 'BenchmarkMetadata(LookupHot|GetAttrHot|ReadDirSnapshotHit|ReadSmallFileCached|CreateWriteFlushClose)$'
 
+function Invoke-LoggedNativeCommand {
+  param(
+    [string]$FilePath,
+    [string[]]$Command
+  )
+
+  if (Test-Path $FilePath) {
+    Remove-Item $FilePath -Force
+  }
+
+  $exe = $Command[0]
+  $args = @()
+  if ($Command.Length -gt 1) {
+    $args = $Command[1..($Command.Length - 1)]
+  }
+
+  & $exe @args 2>&1 | ForEach-Object {
+    $line = $_.ToString()
+    Write-Host $line
+    Add-Content -Path $FilePath -Value $line -Encoding UTF8
+  }
+
+  if ($LASTEXITCODE -ne 0) {
+    throw ("command failed with exit code {0}: {1}" -f $LASTEXITCODE, ($Command -join ' '))
+  }
+}
+
 Write-Host '==> integration stress suite'
 $env:GOMAXPROCS = $Gomaxprocs
-go test ./tests/integration -run $IntegrationRun -count $IntegrationRepeat -timeout $Timeout -v *>&1 | Tee-Object -FilePath $IntegrationLog
+Invoke-LoggedNativeCommand -FilePath $IntegrationLog -Command @('go', 'test', './tests/integration', '-run', $IntegrationRun, '-count', $IntegrationRepeat.ToString(), '-timeout', $Timeout, '-v')
 
 Write-Host ("==> realistic mixed workload x{0}" -f $MixedRepeat)
 $env:GOMAXPROCS = $Gomaxprocs
-go test ./tests/integration -run '^TestRealisticMixedBrowseSaveWatchPressure$' -count $MixedRepeat -timeout $Timeout -v *>&1 | Tee-Object -FilePath $MixedLog
+Invoke-LoggedNativeCommand -FilePath $MixedLog -Command @('go', 'test', './tests/integration', '-run', '^TestRealisticMixedBrowseSaveWatchPressure$', '-count', $MixedRepeat.ToString(), '-timeout', $Timeout, '-v')
 
 if ($RunBench -eq '1') {
   Write-Host '==> metadata backend benchmark'
-  go test ./internal/server -run '^$' -bench $BenchRun -benchmem -count 3 *>&1 | Tee-Object -FilePath $BenchLog
+  Invoke-LoggedNativeCommand -FilePath $BenchLog -Command @('go', 'test', './internal/server', '-run', '^$', '-bench', $BenchRun, '-benchmem', '-count', '3')
 }
 
 @"

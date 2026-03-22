@@ -42,10 +42,10 @@ def parse_csv_last(path: Path) -> dict[str, str]:
 
 def extract_iter43_baseline(doc: Path) -> str:
     text = read_text(doc)
-    m = re.search(r"### mixed workload 延迟形态(.*?)### metadata benchmark 状态", text, re.S)
+    m = re.search(r"### mixed workload.*?(?=### metadata benchmark)", text, re.S | re.I)
     if m:
-        return m.group(1).strip()
-    return "见 docs/architecture/test-report-iter43-stress-suite.md"
+        return m.group(0).strip()
+    return "See docs/architecture/test-report-iter43-stress-suite.md"
 
 def main() -> int:
     ap = argparse.ArgumentParser()

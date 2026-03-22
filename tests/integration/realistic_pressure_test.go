@@ -172,9 +172,17 @@ func TestRealisticMixedBrowseSaveWatchPressure(t *testing.T) {
 				listing, err := cli.ReadDir(dirResp.DirCursorID, 0, 64)
 				metrics.record("readdir", started)
 				if err != nil {
+					_, _ = cli.CloseDir(dirResp.DirCursorID)
 					errCh <- fmt.Errorf("browse-%d ReadDir(%s): %w", i, dir, err)
 					return
 				}
+				started = time.Now()
+				if _, err := cli.CloseDir(dirResp.DirCursorID); err != nil {
+					metrics.record("close_dir", started)
+					errCh <- fmt.Errorf("browse-%d CloseDir(%s): %w", i, dir, err)
+					return
+				}
+				metrics.record("close_dir", started)
 				if len(listing.Entries) == 0 {
 					errCh <- fmt.Errorf("browse-%d ReadDir(%s): empty listing", i, dir)
 					return

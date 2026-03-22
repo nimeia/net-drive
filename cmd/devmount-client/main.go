@@ -57,6 +57,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if _, err := c.CloseDir(dirResp.DirCursorID); err != nil {
+		log.Fatal(err)
+	}
 	fmt.Printf("root entries (%d):\n", len(listResp.Entries))
 	for _, entry := range listResp.Entries {
 		fmt.Printf("- %s [%s]\n", entry.Name, entry.FileType)

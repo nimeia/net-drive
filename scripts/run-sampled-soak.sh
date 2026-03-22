@@ -13,8 +13,9 @@ FAULT_SLOW_CLIENT="${FAULT_SLOW_CLIENT:-1}"
 FAULT_HALF_CLOSE="${FAULT_HALF_CLOSE:-1}"
 FAULT_DELAYED_WRITE="${FAULT_DELAYED_WRITE:-1}"
 EXTRA_ARGS="${EXTRA_ARGS:-}"
+RUN_LOG="$OUT_DIR/sampled-soak-run.log"
 
 mkdir -p "$OUT_DIR"
 cd "$ROOT"
 
-go run ./cmd/devmount-soak   -duration "$DURATION"   -sample-interval "$SAMPLE_INTERVAL"   -browse-workers "$BROWSE_WORKERS"   -save-workers "$SAVE_WORKERS"   -heartbeat-workers "$HEARTBEAT_WORKERS"   -resume-workers "$RESUME_WORKERS"   -fault-slow-client=$([[ "$FAULT_SLOW_CLIENT" == "1" ]] && echo true || echo false)   -fault-half-close=$([[ "$FAULT_HALF_CLOSE" == "1" ]] && echo true || echo false)   -fault-delayed-write=$([[ "$FAULT_DELAYED_WRITE" == "1" ]] && echo true || echo false)   -csv "$OUT_DIR/sampled-soak-samples.csv"   -report "$OUT_DIR/sampled-soak-report.md"   $EXTRA_ARGS
+go run ./cmd/devmount-soak   -duration "$DURATION"   -sample-interval "$SAMPLE_INTERVAL"   -browse-workers "$BROWSE_WORKERS"   -save-workers "$SAVE_WORKERS"   -heartbeat-workers "$HEARTBEAT_WORKERS"   -resume-workers "$RESUME_WORKERS"   -fault-slow-client=$([[ "$FAULT_SLOW_CLIENT" == "1" ]] && echo true || echo false)   -fault-half-close=$([[ "$FAULT_HALF_CLOSE" == "1" ]] && echo true || echo false)   -fault-delayed-write=$([[ "$FAULT_DELAYED_WRITE" == "1" ]] && echo true || echo false)   -csv "$OUT_DIR/sampled-soak-samples.csv"   -report "$OUT_DIR/sampled-soak-report.md"   $EXTRA_ARGS | tee "$RUN_LOG"

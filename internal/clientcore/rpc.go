@@ -114,6 +114,13 @@ func DecodeInto(payload []byte, out any) error {
 		}
 		*target = resp
 		return nil
+	case *protocol.CloseDirResp:
+		resp, err := transport.DecodePayload[protocol.CloseDirResp](payload)
+		if err != nil {
+			return err
+		}
+		*target = resp
+		return nil
 	case *protocol.RenameResp:
 		resp, err := transport.DecodePayload[protocol.RenameResp](payload)
 		if err != nil {

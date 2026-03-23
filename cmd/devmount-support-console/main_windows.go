@@ -3,9 +3,8 @@
 package main
 
 import (
-	"log"
-
 	"developer-mount/internal/winclientgui"
+	"log"
 )
 
 func main() {

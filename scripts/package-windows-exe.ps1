@@ -7,7 +7,7 @@ $release = Join-Path $dist "windows-release"
 $exeRoot = Join-Path $release "exe"
 $bundle = Join-Path $exeRoot "bundle"
 New-Item -ItemType Directory -Force -Path $bundle | Out-Null
-$required = @("devmount-client-win32.exe","devmount-winfsp.exe","devmount-server.exe")
+$required = @("devmount-client-win32.exe","devmount-support-console.exe","devmount-winfsp.exe","devmount-server.exe")
 foreach ($name in $required) { $src = Join-Path $dist $name; if (-not (Test-Path $src)) { throw "Missing $src. Run scripts/build.ps1 first." }; Copy-Item $src (Join-Path $bundle $name) -Force }
 @"
 Write-Host "Developer Mount Windows Client portable bundle"

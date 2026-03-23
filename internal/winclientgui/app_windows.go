@@ -63,8 +63,8 @@ func Run() error {
 	}
 	a := &app{hInstance: hInstance, controls: map[int]uintptr{}, pageControls: map[uiPage][]uintptr{}, runner: winclient.NewRunner(), operations: winclient.Operations(), store: store, logger: logger, recovery: recovery, runtime: winclientruntime.New(nil)}
 	activeApp = a
-	_ = a.logInfo("win32 client startup")
-	className := syscall.StringToUTF16Ptr("DeveloperMountWin32ProductWindow")
+	_ = a.logInfo("support console startup")
+	className := syscall.StringToUTF16Ptr("DeveloperMountSupportConsoleWindow")
 	cursor, _, _ := procLoadCursor.Call(0, uintptr(idcArrow))
 	icon, _, _ := procLoadIcon.Call(0, uintptr(idiApplication))
 	wc := wndClassEx{CbSize: uint32(unsafe.Sizeof(wndClassEx{})), LpfnWndProc: syscall.NewCallback(windowProc), HInstance: hInstance, HIcon: icon, HCursor: cursor, HbrBackground: uintptr(colorWindow + 1), LpszClassName: className, HIconSm: icon}
@@ -72,7 +72,7 @@ func Run() error {
 	if atom == 0 {
 		return fmt.Errorf("RegisterClassExW failed: %w", regErr)
 	}
-	title := syscall.StringToUTF16Ptr("Developer Mount Windows Client")
+	title := syscall.StringToUTF16Ptr("Developer Mount Support Console")
 	hwnd, _, createErr := procCreateWindowEx.Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(title)), uintptr(wsOverlappedWindow|wsVisible), cwUseDefault, cwUseDefault, 1120, 940, 0, 0, hInstance, 0)
 	if hwnd == 0 {
 		return fmt.Errorf("CreateWindowExW failed: %w", createErr)
@@ -148,7 +148,7 @@ func windowProc(hwnd uintptr, msg uint32, wParam, lParam uintptr) uintptr {
 		if activeApp != nil {
 			activeApp.removeTray()
 			activeApp.recoveryState, _ = activeApp.recovery.MarkCleanExit(activeApp.runtime.Snapshot())
-			_ = activeApp.logInfo("win32 client shutdown")
+			_ = activeApp.logInfo("support console shutdown")
 		}
 		procKillTimer.Call(hwnd, timerRefreshID)
 		procPostQuitMessage.Call(0)

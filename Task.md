@@ -396,3 +396,13 @@
 - [x] 新增 `internal/winclientproduct`，沉淀最终用户状态文案与摘要
 - [x] `internal/winclientstore` 升级到 schema v2，支持 settings / workspace_meta
 - [x] 增加方案 B 设计文档
+
+
+## Iter 50 — Windows User Client 实装与 Support Console 固化
+- [x] `internal/winclientusergui` 从骨架升级为独立最终用户 Win32 壳层
+- [x] User Client 页面收口为 Home / Workspaces / Settings / Help
+- [x] Workspaces 接入 store v2 的 settings / workspace_meta
+- [x] Help 接入自检 / 支持包导出 / 日志目录 / Support Console 跳转
+- [x] `internal/winclientgui` 文案与入口固定为 Support Console
+- [x] 更新 README / Task / 打包脚本 / 设计文档
+

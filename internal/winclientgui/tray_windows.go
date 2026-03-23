@@ -49,9 +49,9 @@ func (a *app) syncTray(snapshot winclientruntime.Snapshot) {
 		UFlags:           nifTip,
 		UCallbackMessage: trayCallbackMsg,
 	}
-	tooltip := fmt.Sprintf("Developer Mount — %s", snapshot.Phase)
+	tooltip := fmt.Sprintf("Support Console — %s", snapshot.Phase)
 	if snapshot.MountPoint != "" {
-		tooltip = fmt.Sprintf("Developer Mount — %s @ %s", snapshot.Phase, snapshot.MountPoint)
+		tooltip = fmt.Sprintf("Support Console — %s @ %s", snapshot.Phase, snapshot.MountPoint)
 	}
 	copyUTF16(data.SzTip[:], tooltip)
 	procShellNotifyIcon.Call(nimModify, uintptr(unsafe.Pointer(&data)))
@@ -114,7 +114,7 @@ func (a *app) showTrayMenu() {
 	}
 	defer procDestroyMenu.Call(menu)
 
-	appendMenu(menu, mfString, idTrayOpen, "Open")
+	appendMenu(menu, mfString, idTrayOpen, "Open Support Console")
 	appendMenu(menu, mfString, idTrayDashboard, "Show Dashboard")
 	appendMenu(menu, mfString, idTrayProfiles, "Show Profiles")
 	appendMenu(menu, mfString, idTrayDiagnostics, "Show Diagnostics")
@@ -166,7 +166,7 @@ func (a *app) handleTrayCommand(id int) {
 func (a *app) hideToTray() {
 	procShowWindow.Call(a.hwnd, swHide)
 	if !a.sentHideTip {
-		a.showTrayNotification("Still running", "Developer Mount is minimized to the notification area.")
+		a.showTrayNotification("Support Console still running", "Support Console is minimized to the notification area.")
 		a.sentHideTip = true
 	}
 }

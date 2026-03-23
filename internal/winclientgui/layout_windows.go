@@ -30,7 +30,7 @@ func (a *app) initControls() {
 }
 func (a *app) initDashboardControls(y int) {
 	a.addLabel(pageDashboard, "Dashboard", 16, y, 220, 28)
-	a.addLabel(pageDashboard, "Mount runtime status, diagnostics, and quick actions", 16, y+28, 420, 20)
+	a.addLabel(pageDashboard, "Mount runtime status, support diagnostics, and quick actions", 16, y+28, 420, 20)
 	a.addButton(pageDashboard, idStartMount, "Start Mount", 16, y+60, 120, 30)
 	a.addButton(pageDashboard, idStopMount, "Stop Mount", 148, y+60, 120, 30)
 	a.addButton(pageDashboard, idMountPreview, "Show Mount CLI", 280, y+60, 140, 30)
@@ -47,7 +47,7 @@ func (a *app) initProfileControls(y int) {
 	inputW := 320
 	rightInputW := 220
 	a.addLabel(pageProfiles, "Profiles", xLabel, y, 220, 28)
-	a.addLabel(pageProfiles, "Named client profiles and connection defaults", xLabel, y+28, 360, 20)
+	a.addLabel(pageProfiles, "Named support/test profiles and connection defaults", xLabel, y+28, 360, 20)
 	y += 56
 	a.addLabel(pageProfiles, "Profile Name", xLabel, y, 120, rowH)
 	a.addEdit(pageProfiles, idProfileName, xInput, y, 220, rowH)
@@ -96,7 +96,7 @@ func (a *app) initProfileControls(y int) {
 }
 func (a *app) initDiagnosticsControls(y int) {
 	a.addLabel(pageDiagnostics, "Diagnostics", 16, y, 220, 28)
-	a.addLabel(pageDiagnostics, "Advanced smoke actions, self-checks, and diagnostics export over the current in-memory profile", 16, y+28, 620, 20)
+	a.addLabel(pageDiagnostics, "Advanced smoke actions, self-checks, CLI preview, and diagnostics export over the current in-memory profile", 16, y+28, 620, 20)
 	y += 56
 	a.addLabel(pageDiagnostics, "Operation", 16, y, 100, 24)
 	a.addCombo(pageDiagnostics, idOperation, 100, y, 220, 160)

@@ -240,7 +240,7 @@ func (a *app) dashboardSummary(snapshot winclientruntime.Snapshot) string {
 	if profile == "" {
 		profile = "(unsaved draft)"
 	}
-	return fmt.Sprintf(`Windows client shell
+	return fmt.Sprintf(`Support Console
 
 Page: Dashboard
 Current profile: %s
@@ -268,8 +268,8 @@ Launcher: %s
 
 Use Start Mount / Stop Mount to exercise the WinFsp host lifecycle.
 Tray: close or minimize the window to keep the client running in the notification area.
-Use Profiles to edit connection and mount settings.
-Use Diagnostics to run volume/getattr/readdir/read/materialize, self-checks, diagnostics export, and Windows Explorer smoke against the current profile.`, profile, snapshot.Phase, snapshot.StatusText, a.recoveryState.Summary(), emptyOrDraft(snapshot.ServerAddr, a.text(idAddr)), emptyOrDraft(snapshot.MountPoint, a.text(idMountPoint)), emptyOrDraft(snapshot.VolumePrefix, a.text(idVolumePrefix)), emptyOrDraft(snapshot.RemotePath, a.text(idPath)), emptyOrDraft(snapshot.ClientInstanceID, a.text(idClientInstance)), snapshot.SessionID, emptyOrDraft(snapshot.PrincipalID, "-"), emptyOrDraft(snapshot.ServerName, "-"), emptyOrDraft(snapshot.ServerVersion, "-"), emptyOrDraft(snapshot.ExpiresAt, "-"), a.store.Path(), a.logger.Path(), a.recovery.Path(), emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend()), emptyOrDraft(snapshot.HostBackend, "-"), emptyOrDraft(snapshot.HostBindingStatus, "-"), emptyOrDraft(snapshot.HostDispatcherState, "-"), emptyOrDraft(snapshot.HostDLLPath, "-"), emptyOrDraft(snapshot.HostLauncherPath, "-"))
+Use Profiles to edit advanced connection, mount, and backend settings.
+Use Diagnostics to run volume/getattr/readdir/read/materialize, self-checks, CLI preview, diagnostics export, and Explorer smoke against the current profile.`, profile, snapshot.Phase, snapshot.StatusText, a.recoveryState.Summary(), emptyOrDraft(snapshot.ServerAddr, a.text(idAddr)), emptyOrDraft(snapshot.MountPoint, a.text(idMountPoint)), emptyOrDraft(snapshot.VolumePrefix, a.text(idVolumePrefix)), emptyOrDraft(snapshot.RemotePath, a.text(idPath)), emptyOrDraft(snapshot.ClientInstanceID, a.text(idClientInstance)), snapshot.SessionID, emptyOrDraft(snapshot.PrincipalID, "-"), emptyOrDraft(snapshot.ServerName, "-"), emptyOrDraft(snapshot.ServerVersion, "-"), emptyOrDraft(snapshot.ExpiresAt, "-"), a.store.Path(), a.logger.Path(), a.recovery.Path(), emptyOrDraft(snapshot.RequestedBackend, a.selectedHostBackend()), emptyOrDraft(snapshot.HostBackend, "-"), emptyOrDraft(snapshot.HostBindingStatus, "-"), emptyOrDraft(snapshot.HostDispatcherState, "-"), emptyOrDraft(snapshot.HostDLLPath, "-"), emptyOrDraft(snapshot.HostLauncherPath, "-"))
 }
 func (a *app) diagnosticsSummary(snapshot winclientruntime.Snapshot) string {
 	cfg, cfgErr := a.readConfigFields()

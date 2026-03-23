@@ -388,3 +388,11 @@
 - [x] 新增 `scripts/render-regression-compare.py`，汇总 stress / soak 产物为单份 Markdown 报告
 - [x] 补充 Iter 48 文档，明确本地运行与产物位置
 - [ ] 本地实际跑完 regression compare，并回填最终对比结果
+
+
+## Iter 49 — Windows 最终用户 GUI（方案 B）
+- [x] 新增 `cmd/devmount-support-console`，保留原测试/支持 GUI
+- [x] `cmd/devmount-client-win32` 切换到独立 `winclientusergui` 入口
+- [x] 新增 `internal/winclientproduct`，沉淀最终用户状态文案与摘要
+- [x] `internal/winclientstore` 升级到 schema v2，支持 settings / workspace_meta
+- [x] 增加方案 B 设计文档

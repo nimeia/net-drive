@@ -14,7 +14,8 @@ $targets = @(
     @{ Name = "devmount-server.exe"; Package = "./cmd/devmount-server"; Ldflags = "" },
     @{ Name = "devmount-client.exe"; Package = "./cmd/devmount-client"; Ldflags = "" },
     @{ Name = "devmount-winfsp.exe"; Package = "./cmd/devmount-winfsp"; Ldflags = "" },
-    @{ Name = "devmount-client-win32.exe"; Package = "./cmd/devmount-client-win32"; Ldflags = "-H windowsgui" }
+    @{ Name = "devmount-client-win32.exe"; Package = "./cmd/devmount-client-win32"; Ldflags = "-H windowsgui" },
+    @{ Name = "devmount-support-console.exe"; Package = "./cmd/devmount-support-console"; Ldflags = "-H windowsgui" }
 )
 
 Push-Location $root

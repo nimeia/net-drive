@@ -5,11 +5,11 @@ package main
 import (
 	"log"
 
-	"developer-mount/internal/winclientgui"
+	"developer-mount/internal/winclientusergui"
 )
 
 func main() {
-	if err := winclientgui.Run(); err != nil {
+	if err := winclientusergui.Run(); err != nil {
 		log.Fatal(err)
 	}
 }

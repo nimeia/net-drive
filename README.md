@@ -42,6 +42,7 @@ cmd/
   devmount-client/
   devmount-winfsp/
   devmount-client-win32/
+  devmount-support-console/
 configs/
 docs/
   architecture/
@@ -353,3 +354,5 @@ DRY_RUN=1 ./scripts/run-regression-compare.sh
 
 This wrapper uses the existing stress/soak scripts and then renders a unified markdown report at `dist/regression/regression-compare-report.md`.
 \n
+
+Windows GUI 现已按方案 B 拆出双入口：`devmount-client-win32.exe` 作为最终用户入口，`devmount-support-console.exe` 保留测试/支持 GUI。
